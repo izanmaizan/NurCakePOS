@@ -1,0 +1,51 @@
+# server/nurcake-sync.service - Systemd Service File
+# Path: NurCakePOS/server/nurcake-sync.service
+#
+# Install: sudo cp nurcake-sync.service /etc/systemd/system/
+# Enable:  sudo systemctl enable nurcake-sync
+# Start:   sudo systemctl start nurcake-sync
+# Status:  sudo systemctl status nurcake-sync
+# Logs:    sudo journalctl -u nurcake-sync -f
+
+[Unit]
+Description=NurCake POS Sync Server
+Documentation=https://github.com/nurcake/pos
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=nurcake
+Group=nurcake
+
+# Working directory
+WorkingDirectory=/opt/nurcake-sync/server
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+# Start command
+ExecStart=/usr/bin/node src/index.js
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Resource limits
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nurcake-sync
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/nurcake /var/backups/nurcake
+
+[Install]
+WantedBy=multi-user.target
