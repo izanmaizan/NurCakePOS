@@ -27,7 +27,7 @@ interface SyncStatusBarProps {
 export function SyncStatusBar({
   showDetails = true,
   compact = false,
-}: SyncStatusBarProps): JSX.Element {
+}: SyncStatusBarProps): React.ReactElement {
   const {
     status,
     isOnline,
@@ -124,7 +124,7 @@ export function SyncStatusBar({
 // SYNC SPINNER
 // ============================================
 
-function SyncSpinner({ color = "#FFF" }: { color?: string }): JSX.Element {
+function SyncSpinner({ color = "#FFF" }: { color?: string }): React.ReactElement {
   const spinValue = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -163,7 +163,7 @@ interface SyncDetailModalProps {
 function SyncDetailModal({
   visible,
   onClose,
-}: SyncDetailModalProps): JSX.Element {
+}: SyncDetailModalProps): React.ReactElement {
   const {
     status,
     isOnline,
@@ -291,7 +291,7 @@ function InfoRow({
 }: {
   label: string;
   value: string;
-}): JSX.Element {
+}): React.ReactElement {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -306,7 +306,7 @@ function StatBox({
 }: {
   label: string;
   value: number;
-}): JSX.Element {
+}): React.ReactElement {
   return (
     <View style={styles.statBox}>
       <Text style={styles.statValue}>{value}</Text>
@@ -319,7 +319,7 @@ function StatBox({
 // INLINE SYNC INDICATOR (untuk headers)
 // ============================================
 
-export function SyncIndicator(): JSX.Element {
+export function SyncIndicator(): React.ReactElement {
   const { status, pendingCount, statusColor, isSyncing } = useSync();
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -354,7 +354,7 @@ export function SyncIndicator(): JSX.Element {
 // OFFLINE BANNER
 // ============================================
 
-export function OfflineBanner(): JSX.Element | null {
+export function OfflineBanner(): React.ReactElement | null {
   const { isOffline, pendingCount } = useSync();
 
   if (!isOffline) return null;

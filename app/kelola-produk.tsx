@@ -6,7 +6,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -24,16 +24,16 @@ import {
 import Toast from "react-native-toast-message";
 import BottomNavigation from "../components/BottomNavigation";
 import Button from "../components/Button";
+import EmptyState from "../components/EmptyState";
+import { SkeletonList } from "../components/SkeletonLoader";
 import { useDatabase } from "../context/DatabaseProvider";
+import { useResponsive } from "../hooks/useResponsive";
 import {
   CategoryData,
   ProductData,
   ProductWithCategory,
   useProducts,
 } from "../hooks/useProducts";
-
-const { width: screenWidth } = Dimensions.get("window");
-const isTablet = screenWidth >= 768;
 
 interface ProductForm {
   nama: string;
@@ -297,19 +297,17 @@ export default function KelolaProdukScreen() {
     refetch();
   }, [refetch]);
 
-  /**
-   * Filter products berdasarkan search term dan kategori
-   */
+  // Filter products — debounce 300ms untuk hemat query
   useEffect(() => {
-    const filterProducts = async () => {
+    const timer = setTimeout(async () => {
       if (searchTerm.trim() || selectedCategory) {
         const filtered = await searchProducts(searchTerm, selectedCategory);
         setFilteredProducts(filtered);
       } else {
         setFilteredProducts(products);
       }
-    };
-    filterProducts();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [products, searchTerm, selectedCategory]);
 
   /**
@@ -411,10 +409,18 @@ export default function KelolaProdukScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setProductForm((prev) => ({
-          ...prev,
-          imageUri: result.assets[0].uri,
-        }));
+        const asset = result.assets[0];
+        // Validasi ukuran file — max 5MB
+        const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+        if (asset.fileSize && asset.fileSize > MAX_SIZE_BYTES) {
+          Toast.show({
+            type: "error",
+            text1: "Gambar Terlalu Besar",
+            text2: `Maksimal ukuran gambar adalah 5MB (saat ini: ${(asset.fileSize / 1024 / 1024).toFixed(1)}MB)`,
+          });
+          return;
+        }
+        setProductForm((prev) => ({ ...prev, imageUri: asset.uri }));
       }
     } catch (error) {
       console.error("Error picking image:", error);
@@ -448,6 +454,16 @@ export default function KelolaProdukScreen() {
         type: "error",
         text1: "Error",
         text2: "Harga harus lebih dari 0",
+      });
+      return;
+    }
+
+    const stokValue = parseInt(productForm.stok) || 0;
+    if (stokValue < 0) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Stok tidak boleh negatif",
       });
       return;
     }
@@ -632,13 +648,13 @@ export default function KelolaProdukScreen() {
             resizeMode="cover"
           />
         ) : (
-          <Ionicons name="cube" size={isTablet ? 40 : 30} color="#9CA3AF" />
+          <Ionicons name="cube" size={30} color="#9CA3AF" />
         )}
       </View>
       <Text style={styles.productName} numberOfLines={2}>
         {product.nama}
       </Text>
-      <Text style={styles.productCategory}>{product.kategori.nama}</Text>
+      <Text style={styles.productCategory}>{product.kategoriNama || "-"}</Text>
       <Text style={styles.productPrice}>
         Rp {product.harga.toLocaleString("id-ID")}
       </Text>
@@ -674,10 +690,14 @@ export default function KelolaProdukScreen() {
   if (!isInitialized || loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat data...</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Kelola Produk</Text>
+          <View style={styles.headerRight} />
         </View>
+        <SkeletonList count={6} />
       </SafeAreaView>
     );
   }
@@ -685,16 +705,22 @@ export default function KelolaProdukScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorText}>Terjadi Kesalahan</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-          <Button
-            title="Coba Lagi"
-            onPress={refetch}
-            style={styles.retryButton}
-          />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Kelola Produk</Text>
+          <View style={styles.headerRight} />
         </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Terjadi Kesalahan"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={refetch}
+        />
+        <BottomNavigation currentPage="kelola-produk" />
       </SafeAreaView>
     );
   }
@@ -709,124 +735,115 @@ export default function KelolaProdukScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.content}
+        data={filteredProducts}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        renderItem={({ item }) => renderProductCard(item)}
         contentContainerStyle={[
           styles.scrollContent,
-          {
-            paddingBottom: Platform.OS === "android" ? insets.bottom + 80 : 80,
-          },
+          filteredProducts.length === 0 && { flexGrow: 1 },
+          { paddingBottom: 24 },
         ]}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.actionButtons}>
-          <Button
-            title="Tambah Produk"
-            onPress={() => openProductModal()}
-            icon="add"
-            style={[styles.actionButton, { backgroundColor: "#EA580C" }]}
-          />
-          <Button
-            title="Kelola Kategori"
-            onPress={() => setShowCategoryListModal(true)}
-            icon="settings"
-            variant="outline"
-            style={styles.actionButton}
-          />
-        </View>
-
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Ionicons
-              name="search"
-              size={20}
-              color="#9CA3AF"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholder="Cari produk..."
-              placeholderTextColor="#9CA3AF"
-            />
-            {(searchTerm || selectedCategory) && (
-              <TouchableOpacity
-                onPress={resetFilter}
-                style={styles.clearButton}>
-                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryFilter}
-          contentContainerStyle={styles.categoryFilterContent}>
-          <TouchableOpacity
-            style={[
-              styles.categoryButton,
-              selectedCategory === "" && styles.categoryButtonActive,
-            ]}
-            onPress={() => setSelectedCategory("")}>
-            <Text
-              style={[
-                styles.categoryButtonText,
-                selectedCategory === "" && styles.categoryButtonTextActive,
-              ]}>
-              Semua
-            </Text>
-          </TouchableOpacity>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category.id && styles.categoryButtonActive,
-              ]}
-              onPress={() => setSelectedCategory(category.id)}>
-              <Text
-                style={[
-                  styles.categoryButtonText,
-                  selectedCategory === category.id &&
-                    styles.categoryButtonTextActive,
-                ]}>
-                {category.nama}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {filteredProducts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>
-              {searchTerm || selectedCategory
-                ? "Produk tidak ditemukan"
-                : "Belum ada produk"}
-            </Text>
-            <Text style={styles.emptyStateDescription}>
-              {searchTerm || selectedCategory
-                ? "Coba ubah kata kunci atau filter pencarian"
-                : "Tambahkan produk pertama Anda!"}
-            </Text>
-            {(searchTerm || selectedCategory) && (
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={8}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.actionButtons}>
               <Button
-                title="Lihat Semua Produk"
-                onPress={resetFilter}
-                variant="outline"
-                size="small"
-                style={{ marginTop: 16 }}
+                title="Tambah Produk"
+                onPress={() => openProductModal()}
+                icon="add"
+                style={[styles.actionButton, { backgroundColor: "#EA580C" }]}
               />
-            )}
+              <Button
+                title="Kelola Kategori"
+                onPress={() => setShowCategoryListModal(true)}
+                icon="settings"
+                variant="outline"
+                style={styles.actionButton}
+              />
+            </View>
+
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color="#9CA3AF"
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  value={searchTerm}
+                  onChangeText={setSearchTerm}
+                  placeholder="Cari produk..."
+                  placeholderTextColor="#9CA3AF"
+                />
+                {(searchTerm || selectedCategory) && (
+                  <TouchableOpacity
+                    onPress={resetFilter}
+                    style={styles.clearButton}>
+                    <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryFilter}
+              contentContainerStyle={styles.categoryFilterContent}>
+              <TouchableOpacity
+                style={[
+                  styles.categoryButton,
+                  selectedCategory === "" && styles.categoryButtonActive,
+                ]}
+                onPress={() => setSelectedCategory("")}>
+                <Text
+                  style={[
+                    styles.categoryButtonText,
+                    selectedCategory === "" && styles.categoryButtonTextActive,
+                  ]}>
+                  Semua
+                </Text>
+              </TouchableOpacity>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === category.id && styles.categoryButtonActive,
+                  ]}
+                  onPress={() => setSelectedCategory(category.id)}>
+                  <Text
+                    style={[
+                      styles.categoryButtonText,
+                      selectedCategory === category.id &&
+                        styles.categoryButtonTextActive,
+                    ]}>
+                    {category.nama}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
-        ) : (
-          <View style={styles.productsGrid}>
-            {filteredProducts.map(renderProductCard)}
-          </View>
-        )}
-      </ScrollView>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="cube-outline"
+            title={searchTerm || selectedCategory ? "Produk tidak ditemukan" : "Belum ada produk"}
+            description={searchTerm || selectedCategory ? "Coba ubah kata kunci atau filter pencarian" : "Tambahkan produk pertama Anda!"}
+            actionLabel={searchTerm || selectedCategory ? "Lihat Semua Produk" : undefined}
+            onAction={searchTerm || selectedCategory ? resetFilter : undefined}
+          />
+        }
+      />
 
       {submitting && (
         <View style={styles.loadingOverlay}>
@@ -1252,8 +1269,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
+  columnWrapper: {
+    justifyContent: "space-between",
+  },
   productCard: {
-    width: isTablet ? "18%" : "48%",
+    width: "48%",
     backgroundColor: "white",
     borderRadius: 12,
     padding: 12,

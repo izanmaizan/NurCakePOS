@@ -4,19 +4,6 @@
 const { query, getClient } = require("../models/database");
 const { v4: uuidv4 } = require("uuid");
 
-// Store processed batch IDs for idempotency (simple in-memory, use Redis in production)
-const processedBatches = new Map();
-
-// Clean old batch IDs (older than 24 hours)
-setInterval(() => {
-  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-  for (const [batchId, timestamp] of processedBatches) {
-    if (timestamp < oneDayAgo) {
-      processedBatches.delete(batchId);
-    }
-  }
-}, 60 * 60 * 1000); // Run every hour
-
 // ============================================
 // PUSH CHANGES
 // ============================================
@@ -32,13 +19,16 @@ async function pushChanges(req, res) {
     });
   }
 
-  // Check idempotency
-  if (processedBatches.has(batch_id)) {
-    console.log(`Batch ${batch_id} already processed, returning cached result`);
+  // Check idempotency via database
+  const existing = await query(
+    "SELECT processed_at FROM processed_batches WHERE batch_id = $1",
+    [batch_id]
+  );
+  if (existing.rows.length > 0) {
     return res.json({
       success: true,
       batch_id,
-      processed_at: new Date(processedBatches.get(batch_id)).toISOString(),
+      processed_at: existing.rows[0].processed_at,
       results: [],
       conflicts: [],
       message: "Batch sudah diproses sebelumnya",
@@ -142,8 +132,11 @@ async function pushChanges(req, res) {
 
     await client.query("COMMIT");
 
-    // Mark batch as processed
-    processedBatches.set(batch_id, Date.now());
+    // Mark batch as processed in database
+    await query(
+      "INSERT INTO processed_batches (batch_id, device_id, records_count) VALUES ($1, $2, $3) ON CONFLICT (batch_id) DO NOTHING",
+      [batch_id, device_id, changes.length]
+    );
 
     // Update device last sync
     await query(

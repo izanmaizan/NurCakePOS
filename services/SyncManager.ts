@@ -166,7 +166,7 @@ class SyncManager {
   }
 
   private getPollingInterval(): number {
-    if (!this.currentState.isOnline) {
+    if (!this.currentState.isOnline || this.currentState.status === "error") {
       return POLLING_INTERVALS?.OFFLINE || 30000;
     }
 
@@ -294,7 +294,11 @@ class SyncManager {
         conflicts,
       });
     } catch (error: any) {
-      console.error("[SyncManager] Sync failed:", error);
+      const isAlreadyInError = this.currentState.status === "error" &&
+        this.currentState.error === (error.message || "Sync failed");
+      if (!isAlreadyInError) {
+        console.error("[SyncManager] Sync failed:", error);
+      }
 
       this.currentState.error = error.message || "Sync failed";
       this.updateStatus("error");

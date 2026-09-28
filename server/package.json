@@ -8,7 +8,9 @@
     "dev": "nodemon src/index.js",
     "db:init": "node src/scripts/initDb.js",
     "db:seed": "node src/scripts/seedData.js",
-    "db:reset": "npm run db:init && npm run db:seed"
+    "db:seed:full": "node src/scripts/seedFullData.js",
+    "db:seed:full:reset": "node src/scripts/seedFullData.js --force",
+    "db:reset": "npm run db:init && npm run db:seed:full"
   },
   "dependencies": {
     "compression": "^1.8.1",

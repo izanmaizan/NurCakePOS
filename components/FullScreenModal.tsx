@@ -55,7 +55,7 @@ export function FullScreenModal({
   animationType = "slide",
   bottomSheet = false,
   bottomSheetHeight = "90%",
-}: FullScreenModalProps): JSX.Element {
+}: FullScreenModalProps): React.ReactElement {
   // Bottom Sheet Style Modal
   if (bottomSheet) {
     return (
@@ -78,12 +78,7 @@ export function FullScreenModal({
           <View
             style={[
               styles.bottomSheetContent,
-              {
-                maxHeight:
-                  typeof bottomSheetHeight === "number"
-                    ? bottomSheetHeight
-                    : bottomSheetHeight,
-              },
+              { maxHeight: bottomSheetHeight as any },
             ]}>
             {/* Handle Bar */}
             <View style={styles.handleBarContainer}>
@@ -187,7 +182,7 @@ export function CenterModal({
   children,
   maxWidth = 400,
   closeOnBackdrop = true,
-}: CenterModalProps): JSX.Element {
+}: CenterModalProps): React.ReactElement {
   return (
     <Modal
       visible={visible}
@@ -238,7 +233,7 @@ export function ImageModal({
   onClose,
   imageUri,
   title = "Foto",
-}: ImageModalProps): JSX.Element {
+}: ImageModalProps): React.ReactElement {
   const Image = require("react-native").Image;
 
   return (

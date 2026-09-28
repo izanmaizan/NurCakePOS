@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -36,34 +37,23 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Simulate API call - replace with actual API
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Mock login validation
       if (formData.username === "admin" && formData.password === "admin123") {
-        Toast.show({
-          type: "success",
-          text1: "Login Berhasil",
-          text2: "Selamat datang di NurCake POS",
-        });
-
-        setTimeout(() => {
-          router.replace("/pos");
-        }, 1000);
+        router.replace("/pos");
       } else {
         Toast.show({
           type: "error",
           text1: "Login Gagal",
           text2: "Username atau password salah",
+          visibilityTime: 3000,
         });
+        setLoading(false);
       }
-    } catch (error) {
+    } catch {
       Toast.show({
         type: "error",
         text1: "Error",
         text2: "Terjadi kesalahan saat login",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -155,16 +145,34 @@ export default function LoginScreen() {
               ]}
               onPress={handleLogin}
               disabled={loading}>
-              <Text style={styles.loginButtonText}>
-                {loading ? "Memproses..." : "Masuk"}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>Masuk</Text>
+              )}
             </TouchableOpacity>
+
+            {/* Hint login */}
+            <View style={styles.hintBox}>
+              <Ionicons name="information-circle-outline" size={14} color="#3B82F6" />
+              <Text style={styles.hintText}>
+                {"  "}Demo: admin / admin123
+              </Text>
+            </View>
 
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                © 2024 NurCake. Semua hak dilindungi.
+                © 2025 NurCake. Semua hak dilindungi.
               </Text>
+              {__DEV__ && (
+                <TouchableOpacity
+                  onPress={() => router.push("/dev-seed" as any)}
+                  style={styles.devLink}>
+                  <Ionicons name="flask-outline" size={12} color="#6B7280" />
+                  <Text style={styles.devLinkText}>Dev Seed</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -272,30 +280,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  demoInfo: {
-    marginTop: 24,
-    padding: 16,
+  hintBox: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
     backgroundColor: "#EFF6FF",
     borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#3B82F6",
   },
-  demoText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1E40AF",
-    marginBottom: 4,
-  },
-  demoCredentials: {
+  hintText: {
     fontSize: 12,
-    color: "#3730A3",
+    color: "#3B82F6",
   },
   footer: {
     marginTop: 24,
     alignItems: "center",
+    gap: 6,
   },
   footerText: {
     fontSize: 12,
     color: "#9CA3AF",
+  },
+  devLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
+  },
+  devLinkText: {
+    fontSize: 11,
+    color: "#6B7280",
   },
 });

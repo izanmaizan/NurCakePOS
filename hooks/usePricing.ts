@@ -627,5 +627,4 @@ function calculateMargin(hargaModal: number, hargaJual: number): number {
   return Math.round(((hargaJual - hargaModal) / hargaModal) * 100);
 }
 
-export type { KriteriaItem, MasterKriteria, RulesHarga, RulesHargaWithDetails };
 export default usePricing;

@@ -79,7 +79,7 @@ export interface SyncQueueItem {
   id: string;
   table_name: string;
   record_id: string;
-  operation: SyncOperation;
+  operation: SyncOperationType;
   payload: string;
   priority: number;
   attempts: number;
@@ -95,7 +95,7 @@ export interface SyncPushRequest {
 
 export interface SyncChange {
   table: string;
-  operation: SyncOperation;
+  operation: SyncOperationType;
   client_id: string;
   data: Record<string, any>;
   version: number;
@@ -145,7 +145,7 @@ export interface SyncPullResponse {
 export interface SyncPullChange {
   server_id: string;
   client_id: string;
-  operation: SyncOperation;
+  operation: SyncOperationType;
   data: Record<string, any>;
   version: number;
   updated_at: string;
@@ -157,6 +157,7 @@ export interface SyncProgress {
   current: number;
   total: number;
   tableName?: string;
+  message?: string;
 }
 
 export type SyncStatusCallback = (status: ManagerStatusType) => void;

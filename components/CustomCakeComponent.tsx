@@ -69,33 +69,26 @@ const CriteriaDropdown: React.FC<{
 
   const handleToggle = () => {
     if (!disabled && items.length > 0) {
-      const newState = !isOpen;
-      setIsOpen(newState);
-      onDropdownToggle?.(newState);
+      setIsOpen(true);
     }
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
   };
 
   const handleSelect = (value: string) => {
     onValueChange(value);
-    setTimeout(() => {
-      setIsOpen(false);
-      onDropdownToggle?.(false);
-    }, 50);
-  };
-
-  const handleOverlayPress = () => {
     setIsOpen(false);
-    onDropdownToggle?.(false);
   };
 
   return (
-    <View style={[styles.dropdownContainer, isOpen && { zIndex: 9999 }]}>
+    <View style={styles.dropdownContainer}>
       <TouchableOpacity
         activeOpacity={0.7}
         style={[
           styles.dropdownButton,
           disabled && styles.disabledInput,
-          isOpen && styles.dropdownButtonOpen,
         ]}
         onPress={handleToggle}
         disabled={disabled || items.length === 0}>
@@ -113,45 +106,58 @@ const CriteriaDropdown: React.FC<{
         />
       </TouchableOpacity>
 
-      {isOpen && items.length > 0 && (
-        <>
-          <TouchableOpacity
-            style={styles.dropdownOverlay}
-            activeOpacity={1}
-            onPress={handleOverlayPress}
-          />
+      <Modal
+        visible={isOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleClose}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.dropdownModalOverlay}
+          onPress={handleClose}>
+          <View style={styles.dropdownModalContent}>
+            <View style={styles.dropdownModalHeader}>
+              <Text style={styles.dropdownModalTitle}>{placeholder}</Text>
+              <TouchableOpacity onPress={handleClose}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.dropdownList}>
             <ScrollView
-              nestedScrollEnabled={true}
+              style={styles.dropdownModalList}
               showsVerticalScrollIndicator={true}
-              bounces={false}
-              keyboardShouldPersistTaps="always"
-              persistentScrollbar={true}
-              contentContainerStyle={styles.dropdownScrollContent}>
-              {items.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.dropdownItem,
-                    selectedValue === item.id && styles.dropdownItemSelected,
-                  ]}
-                  onPress={() => handleSelect(item.id)}>
-                  <Text
+              bounces={false}>
+              {items.length === 0 ? (
+                <View style={styles.emptyDropdown}>
+                  <Text style={styles.emptyDropdownText}>Tidak ada pilihan</Text>
+                </View>
+              ) : (
+                items.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.7}
                     style={[
-                      styles.dropdownItemText,
-                      selectedValue === item.id &&
-                        styles.dropdownItemTextSelected,
-                    ]}>
-                    {item.nama}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                      styles.dropdownModalItem,
+                      selectedValue === item.id && styles.dropdownModalItemSelected,
+                    ]}
+                    onPress={() => handleSelect(item.id)}>
+                    <Text
+                      style={[
+                        styles.dropdownModalItemText,
+                        selectedValue === item.id && styles.dropdownModalItemTextSelected,
+                      ]}>
+                      {item.nama}
+                    </Text>
+                    {selectedValue === item.id && (
+                      <Ionicons name="checkmark" size={18} color="#EA580C" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
-        </>
-      )}
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -1263,73 +1269,68 @@ const styles = StyleSheet.create({
   dropdownPlaceholder: {
     color: "#9CA3AF",
   },
-  dropdownList: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    right: 0,
+  dropdownModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  dropdownModalContent: {
     backgroundColor: "white",
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: "#EA580C",
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    maxHeight: 300,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 10,
-    zIndex: 10001,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: "60%",
+    paddingBottom: 24,
   },
-  dropdownScrollContent: {
-    paddingVertical: 4,
+  dropdownModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
   },
-  dropdownItem: {
+  dropdownModalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  dropdownModalList: {
+    flexGrow: 0,
+  },
+  dropdownModalItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
-    backgroundColor: "white",
-    minHeight: 48,
+    minHeight: 52,
   },
-  dropdownItemSelected: {
+  dropdownModalItemSelected: {
     backgroundColor: "#FEF3F2",
   },
-  dropdownItemText: {
-    fontSize: 14,
+  dropdownModalItemText: {
+    fontSize: 15,
     color: "#111827",
     fontWeight: "500",
-    lineHeight: 20,
+    flex: 1,
   },
-  dropdownItemTextSelected: {
+  dropdownModalItemTextSelected: {
     color: "#EA580C",
     fontWeight: "600",
   },
-  dropdownOverlay: {
-    position: "absolute",
-    top: -10000,
-    left: -10000,
-    right: -10000,
-    bottom: -10000,
-    backgroundColor: "transparent",
-    zIndex: 10000,
+  emptyDropdown: {
+    padding: 24,
+    alignItems: "center",
+  },
+  emptyDropdownText: {
+    fontSize: 14,
+    color: "#9CA3AF",
   },
   disabledInput: {
     opacity: 0.6,
     backgroundColor: "#F3F4F6",
-  },
-  // Full Screen Modal (untuk Add Modal)
-  fullScreenBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  fullScreenModalContainer: {
-    flex: 1,
-    backgroundColor: "white",
-    marginTop: 50,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: "hidden",
   },
 });

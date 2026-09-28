@@ -98,9 +98,14 @@ function AppContent() {
       <OfflineBanner />
 
       {/* Stack Navigator */}
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right",
+          animationDuration: 220,
+        }}>
+        <Stack.Screen name="index" options={{ animation: "fade" }} />
+        <Stack.Screen name="login" options={{ animation: "fade" }} />
         <Stack.Screen name="pos" />
         <Stack.Screen name="kelola-produk" />
         <Stack.Screen name="kelola-harga" />
@@ -108,7 +113,6 @@ function AppContent() {
         <Stack.Screen name="laporan" />
         <Stack.Screen name="buku-pesanan" />
         <Stack.Screen name="lacak-pesanan" />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
 
       <StatusBar style="dark" />

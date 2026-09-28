@@ -8,8 +8,10 @@ export const SYNC_CONFIG = {
   // Untuk Android Emulator gunakan: http://10.0.2.2:3000/api/v1
   // Untuk Physical Device gunakan IP laptop: http://192.168.x.x:3000/api/v1
   // Untuk iOS Simulator gunakan: http://localhost:3000/api/v1
-  SERVER_URL: "http://172.20.10.11:3000/api/v1", // ini pada hotspot HP
-  // SERVER_URL: "http://10.225.0.61:3000/api/v1", // ini pada Wifi RS
+  SERVER_URL: "http://10.0.2.2:3000/api/v1", // Android Emulator
+  // SERVER_URL: "http://localhost:3000/api/v1", // iOS Simulator
+  // SERVER_URL: "http://172.20.10.11:3000/api/v1", // Hotspot HP
+  // SERVER_URL: "http://10.225.0.61:3000/api/v1", // Wifi RS
 
   // ============================================
   // BATCH CONFIGURATION

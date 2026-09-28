@@ -1,11 +1,10 @@
 // app/kelola-harga.tsx - Complete Fixed Version with Modal Dropdown
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Modal,
   Platform,
   ScrollView,
@@ -22,15 +21,15 @@ import {
 import Toast from "react-native-toast-message";
 import BottomNavigation from "../components/BottomNavigation";
 import Button from "../components/Button";
+import EmptyState from "../components/EmptyState";
+import { SkeletonList } from "../components/SkeletonLoader";
 import { useDatabase } from "../context/DatabaseProvider";
+import { useResponsive } from "../hooks/useResponsive";
 import {
   KriteriaItem,
   RulesHargaWithDetails,
   usePricing,
 } from "../hooks/usePricing";
-
-const { width: screenWidth } = Dimensions.get("window");
-const isTablet = screenWidth >= 768;
 
 type TabType = "kriteria" | "rules";
 type KriteriaType = "jenisKue" | "variasiKue" | "ukuranKue" | "kotakKue";
@@ -232,11 +231,14 @@ export default function KelolaHargaScreen() {
   };
 
   /**
-   * Update filtered rules ketika search term atau rules berubah
+   * Update filtered rules dengan debounce 300ms agar tidak query tiap keystroke
    */
   useEffect(() => {
-    const filtered = searchRulesHarga(searchTerm);
-    setFilteredRules(filtered);
+    const timer = setTimeout(() => {
+      const filtered = searchRulesHarga(searchTerm);
+      setFilteredRules(filtered);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [rulesHarga, searchTerm, searchRulesHarga]);
 
   /**
@@ -600,16 +602,11 @@ export default function KelolaHargaScreen() {
           {kriteriaConfig[activeKriteria].data.length})
         </Text>
         {kriteriaConfig[activeKriteria].data.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>
-              Belum ada {kriteriaConfig[activeKriteria].title.toLowerCase()}
-            </Text>
-            <Text style={styles.emptyStateDescription}>
-              Tambahkan {kriteriaConfig[activeKriteria].title.toLowerCase()}
-              pertama untuk mulai membuat rules harga
-            </Text>
-          </View>
+          <EmptyState
+            icon="cube-outline"
+            title={`Belum ada ${kriteriaConfig[activeKriteria].title.toLowerCase()}`}
+            description={`Tambahkan ${kriteriaConfig[activeKriteria].title.toLowerCase()} pertama untuk mulai membuat rules harga`}
+          />
         ) : (
           kriteriaConfig[activeKriteria].data.map((item) => (
             <View key={item.id} style={styles.kriteriaItem}>
@@ -695,17 +692,13 @@ export default function KelolaHargaScreen() {
           Rules Harga ({filteredRules.length})
         </Text>
         {filteredRules.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="pricetag-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>
-              {searchTerm ? "Rules tidak ditemukan" : "Belum ada rules harga"}
-            </Text>
-            <Text style={styles.emptyStateDescription}>
-              {searchTerm
-                ? "Coba ubah kata kunci pencarian"
-                : "Buat rules harga pertama dengan menentukan kriteria dan harga"}
-            </Text>
-          </View>
+          <EmptyState
+            icon="pricetag-outline"
+            title={searchTerm ? "Rules tidak ditemukan" : "Belum ada rules harga"}
+            description={searchTerm ? "Coba ubah kata kunci pencarian" : "Buat rules harga pertama dengan menentukan kriteria dan harga"}
+            actionLabel={searchTerm ? "Hapus Pencarian" : undefined}
+            onAction={searchTerm ? () => setSearchTerm("") : undefined}
+          />
         ) : (
           filteredRules.map((rule) => (
             <View key={rule.id} style={styles.ruleItem}>
@@ -761,10 +754,14 @@ export default function KelolaHargaScreen() {
   if (!isInitialized || loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat data...</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Kelola Harga</Text>
+          <View style={styles.headerRight} />
         </View>
+        <SkeletonList count={5} />
       </SafeAreaView>
     );
   }
@@ -772,16 +769,22 @@ export default function KelolaHargaScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorText}>Terjadi Kesalahan</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-          <Button
-            title="Coba Lagi"
-            onPress={refetch}
-            style={styles.retryButton}
-          />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Kelola Harga</Text>
+          <View style={styles.headerRight} />
         </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Terjadi Kesalahan"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={refetch}
+        />
+        <BottomNavigation currentPage="kelola-harga" />
       </SafeAreaView>
     );
   }
@@ -842,7 +845,7 @@ export default function KelolaHargaScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingBottom: Platform.OS === "android" ? insets.bottom + 80 : 80,
+            paddingBottom: 24,
           },
         ]}
         showsVerticalScrollIndicator={false}>

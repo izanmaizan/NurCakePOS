@@ -36,7 +36,7 @@ interface UseSyncReturn {
 
 interface UseSyncProgressReturn {
   isActive: boolean;
-  phase: "idle" | "push" | "pull";
+  phase: "idle" | "push" | "pull" | "complete";
   current: number;
   total: number;
   percent: number;
@@ -134,7 +134,7 @@ export function useSync(): UseSyncReturn {
 export function useSyncProgress(): UseSyncProgressReturn {
   const [progress, setProgress] = useState({
     isActive: false,
-    phase: "idle" as "idle" | "push" | "pull",
+    phase: "idle" as "idle" | "push" | "pull" | "complete",
     current: 0,
     total: 0,
     percent: 0,
@@ -149,7 +149,7 @@ export function useSyncProgress(): UseSyncProgressReturn {
         current: p.current,
         total: p.total,
         percent: p.total > 0 ? Math.round((p.current / p.total) * 100) : 0,
-        message: p.message,
+        message: p.message ?? "",
       });
 
       // Reset after completion

@@ -84,8 +84,7 @@ export const useProducts = () => {
           nama: productData.nama,
           harga: productData.harga,
           stok: productData.stok,
-          kategoriId: productData.kategoriId,
-          deskripsi: productData.deskripsi,
+          kategoriId: productData.kategoriId ?? "",
           gambarPath: imageUri || productData.gambarPath,
         });
 
@@ -219,8 +218,7 @@ export const useProducts = () => {
         const term = searchTerm.toLowerCase();
         filtered = filtered.filter(
           (p) =>
-            p.nama.toLowerCase().includes(term) ||
-            (p.deskripsi && p.deskripsi.toLowerCase().includes(term))
+            p.nama.toLowerCase().includes(term)
         );
       }
 
@@ -329,5 +327,4 @@ export const useProducts = () => {
   };
 };
 
-export type { CategoryData, ProductData, ProductWithCategory };
 export default useProducts;

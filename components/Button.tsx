@@ -2,6 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  StyleProp,
   Text,
   TextStyle,
   TouchableOpacity,
@@ -17,8 +18,8 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export default function Button({

@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -24,15 +24,16 @@ import {
 import Toast from "react-native-toast-message";
 import BottomNavigation from "../components/BottomNavigation";
 import Button from "../components/Button";
+import EmptyState from "../components/EmptyState";
+import { SkeletonList } from "../components/SkeletonLoader";
 import { useDatabase } from "../context/DatabaseProvider";
+import { useResponsive } from "../hooks/useResponsive";
 import { OrderWithDetails, useOrders } from "../hooks/useOrders";
 import {
   TransactionWithDetails,
   useTransactions,
 } from "../hooks/useTransactions";
 
-const { width: screenWidth } = Dimensions.get("window");
-const isTablet = screenWidth >= 768;
 
 type StatusFilter =
   | "semua"
@@ -413,11 +414,6 @@ export default function BukuPesananScreen() {
     const orderTransactionIds = new Set<string>();
 
     orders.forEach((order) => {
-      // Track this order's transaction ID if exists
-      if (order.transaksiId) {
-        orderTransactionIds.add(order.transaksiId);
-      }
-
       // FIX: Handle date properly
       const tanggalPesan =
         typeof order.tanggalPesan === "string"
@@ -449,28 +445,27 @@ export default function BukuPesananScreen() {
               minute: "2-digit",
             })
           : "00:00",
-        totalHarga: order.hargaTotal,
+        totalHarga: order.totalHarga,
         statusPesanan: order.statusPesanan,
         catatan: order.catatan,
         hasKueCustom: true,
         ringkasanItems: [
           {
-            nama: `${order.jenisKueDetail?.nama || "Kue Custom"} - ${
-              order.variasiKueDetail?.nama || "Variasi"
+            nama: `${order.jenisKue || "Kue Custom"} - ${
+              order.variasiKue || "Variasi"
             }`,
             jumlah: 1,
-            harga: order.hargaTotal,
-            subtotal: order.hargaTotal,
+            harga: order.totalHarga,
+            subtotal: order.totalHarga,
           },
         ],
         totalItems: 1,
         type: "order",
         originalData: order,
-        // FIX: Add file:// prefix for image
-        gambarReferensi: order.gambarReferensiPath
-          ? order.gambarReferensiPath.startsWith("file://")
-            ? order.gambarReferensiPath
-            : `file://${order.gambarReferensiPath}`
+        gambarReferensi: order.gambarReferensi
+          ? order.gambarReferensi.startsWith("file://")
+            ? order.gambarReferensi
+            : `file://${order.gambarReferensi}`
           : undefined,
       });
     });
@@ -583,14 +578,6 @@ export default function BukuPesananScreen() {
             booking.statusPesanan === "pending" && pickupDateTime <= now;
         } else if (filterStatus === "sudah_diambil") {
           matchStatus = booking.statusPesanan === "completed";
-        } else if (filterStatus === "menunggu") {
-          // FIX: Menunggu = pending dengan pickup time di masa depan
-          const pickupDateTime = new Date(
-            `${booking.tanggalPengambilan}T${booking.jamPengambilan || "00:00"}`
-          );
-          const now = new Date();
-          matchStatus =
-            booking.statusPesanan === "pending" && pickupDateTime > now;
         } else {
           matchStatus = booking.statusPesanan === filterStatus;
         }
@@ -971,10 +958,14 @@ export default function BukuPesananScreen() {
   if (!isInitialized || loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat pesanan...</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Buku Pesanan</Text>
+          <View style={{ width: 38 }} />
         </View>
+        <SkeletonList count={5} />
       </SafeAreaView>
     );
   }
@@ -982,19 +973,22 @@ export default function BukuPesananScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorText}>Terjadi Kesalahan</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-          <Button
-            title="Coba Lagi"
-            onPress={() => {
-              refetchOrders();
-              refetchTransactions();
-            }}
-            style={styles.retryButton}
-          />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Buku Pesanan</Text>
+          <View style={{ width: 38 }} />
         </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Terjadi Kesalahan"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={() => { refetchOrders(); refetchTransactions(); }}
+        />
+        <BottomNavigation currentPage="buku-pesanan" />
       </SafeAreaView>
     );
   }
@@ -1064,37 +1058,31 @@ export default function BukuPesananScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <FlatList
           style={styles.pesananList}
+          data={filteredBookings}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => renderPesananCard(item)}
           contentContainerStyle={[
             styles.scrollContent,
-            {
-              paddingBottom:
-                Platform.OS === "android" ? insets.bottom + 80 : 80,
-            },
+            filteredBookings.length === 0 && { flexGrow: 1 },
+            { paddingBottom: 24 },
           ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
-          showsVerticalScrollIndicator={false}>
-          {filteredBookings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="book-outline" size={48} color="#9CA3AF" />
-              <Text style={styles.emptyStateText}>
-                {searchTerm || filterStatus !== "semua"
-                  ? "Pesanan tidak ditemukan"
-                  : "Belum ada pesanan"}
-              </Text>
-              <Text style={styles.emptyStateDescription}>
-                {searchTerm || filterStatus !== "semua"
-                  ? "Coba ubah kata kunci atau filter pencarian"
-                  : "Pesanan akan muncul di sini setelah dibuat"}
-              </Text>
-            </View>
-          ) : (
-            filteredBookings.map(renderPesananCard)
-          )}
-        </ScrollView>
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={8}
+          ListEmptyComponent={
+            <EmptyState
+              icon="book-outline"
+              title={searchTerm || filterStatus !== "semua" ? "Pesanan tidak ditemukan" : "Belum ada pesanan"}
+              description={searchTerm || filterStatus !== "semua" ? "Coba ubah kata kunci atau filter pencarian" : "Pesanan akan muncul di sini setelah dibuat dari POS"}
+            />
+          }
+        />
       </View>
 
       <Modal
@@ -1863,7 +1851,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   galleryImage: {
-    width: screenWidth - 40,
+    width: "90%",
     height: "80%",
   },
   statusDropdownContainer: {

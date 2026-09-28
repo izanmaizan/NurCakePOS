@@ -4,7 +4,6 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,17 +17,17 @@ import {
 import Toast from "react-native-toast-message";
 import BottomNavigation from "../components/BottomNavigation";
 import Button from "../components/Button";
+import EmptyState from "../components/EmptyState";
+import { SkeletonStatRow } from "../components/SkeletonLoader";
 
 // Import hooks
 import { useDatabase } from "../context/DatabaseProvider";
 import { useKueReady } from "../hooks/useKueReady";
+import { useResponsive } from "../hooks/useResponsive";
 import { useOrders } from "../hooks/useOrders";
 import { usePricing } from "../hooks/usePricing";
 import { useProducts } from "../hooks/useProducts";
 import { useTransactions } from "../hooks/useTransactions";
-
-const { width: screenWidth } = Dimensions.get("window");
-const isTablet = screenWidth >= 768;
 
 // Types
 interface SalesData {
@@ -104,6 +103,12 @@ export default function LaporanScreen() {
   >("week");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [showAllProducts, setShowAllProducts] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleRetry = () => {
+    setStats(null);
+    setRefreshTrigger((n) => n + 1);
+  };
 
   const {
     orders,
@@ -113,7 +118,6 @@ export default function LaporanScreen() {
     getPopularCakeCombinations,
     getThisWeekOrders,
     getThisMonthOrders,
-    getYearlyOrders,
   } = useOrders();
 
   const {
@@ -295,9 +299,9 @@ export default function LaporanScreen() {
         // Transform top products data
         const transformedTopProducts: ProductSales[] = (topProducts || []).map(
           (product: any) => ({
-            name: product.namaProduk || "",
-            quantity: product.totalTerjual || 0,
-            revenue: product.totalPendapatan || 0,
+            name: product.namaItem || "",
+            quantity: product.totalQuantity || 0,
+            revenue: product.totalSales || 0,
             kategori: product.kategoriNama || "Umum",
           })
         );
@@ -367,6 +371,7 @@ export default function LaporanScreen() {
   }, [
     isInitialized,
     selectedPeriod,
+    refreshTrigger,
     getSalesStats,
     getOrderStats,
     getTopSellingProducts,
@@ -415,10 +420,15 @@ export default function LaporanScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat data laporan...</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Laporan Penjualan</Text>
+          <View style={{ width: 40 }} />
         </View>
+        <SkeletonStatRow />
+        <SkeletonStatRow />
         <BottomNavigation currentPage="laporan" />
       </SafeAreaView>
     );
@@ -427,16 +437,21 @@ export default function LaporanScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorTitle}>Terjadi Kesalahan</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button
-            title="Coba Lagi"
-            onPress={() => window.location.reload()}
-            style={styles.retryButton}
-          />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Laporan Penjualan</Text>
+          <View style={{ width: 40 }} />
         </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Terjadi Kesalahan"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={handleRetry}
+        />
         <BottomNavigation currentPage="laporan" />
       </SafeAreaView>
     );
@@ -445,14 +460,20 @@ export default function LaporanScreen() {
   if (!stats) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Ionicons name="document-text-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyTitle}>Belum Ada Data Laporan</Text>
-          <Text style={styles.emptyText}>
-            Data transaksi dan pesanan akan muncul setelah aktivitas penjualan
-            dimulai.
-          </Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Laporan Penjualan</Text>
+          <View style={{ width: 40 }} />
         </View>
+        <EmptyState
+          icon="document-text-outline"
+          title="Belum Ada Data Laporan"
+          description="Data transaksi dan pesanan akan muncul setelah aktivitas penjualan dimulai."
+          actionLabel="Muat Ulang"
+          onAction={handleRetry}
+        />
         <BottomNavigation currentPage="laporan" />
       </SafeAreaView>
     );
@@ -964,7 +985,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   summaryCard: {
-    width: isTablet ? "23%" : "48%",
+    width: "48%",
     backgroundColor: "white",
     borderRadius: 12,
     padding: 16,
@@ -985,7 +1006,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardValue: {
-    fontSize: isTablet ? 20 : 18,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#111827",
     marginBottom: 4,

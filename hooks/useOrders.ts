@@ -119,19 +119,17 @@ export const useOrders = () => {
     loadData();
   }, [loadData]);
 
-  // Generate order number
+  // Generate order number — gunakan timestamp untuk hindari race condition
   const generateOrderNumber = async (): Promise<string> => {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-    const prefix = `ORD-${dateStr}-`;
-
-    const result = await sqliteService.getFirst<{ count: number }>(
-      `SELECT COUNT(*) as count FROM pesanan_kue WHERE nomorPesanan LIKE ?`,
-      [`${prefix}%`]
-    );
-
-    const count = (result?.count || 0) + 1;
-    return `${prefix}${count.toString().padStart(4, "0")}`;
+    // 6 digit akhir timestamp ms + 2 digit random = unik di semua skenario concurrent
+    const uniqueSuffix =
+      Date.now().toString().slice(-6) +
+      Math.floor(Math.random() * 100)
+        .toString()
+        .padStart(2, "0");
+    return `ORD-${dateStr}-${uniqueSuffix}`;
   };
 
   // Create order
@@ -144,6 +142,9 @@ export const useOrders = () => {
         const nomorPesanan = await generateOrderNumber();
         const timestamp = sqliteService.getCurrentTimestamp();
         const dpBayar = orderData.dpBayar || 0;
+        if (dpBayar > orderData.totalHarga) {
+          throw new Error("Uang muka (DP) tidak boleh melebihi total harga");
+        }
         const sisaPembayaran = orderData.totalHarga - dpBayar;
 
         await sqliteService.run(
@@ -589,5 +590,4 @@ export const useOrders = () => {
   };
 };
 
-export type { MasterData, OrderData, OrderWithDetails };
 export default useOrders;

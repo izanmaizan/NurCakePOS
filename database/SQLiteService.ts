@@ -556,19 +556,19 @@ class SQLiteService {
 
     if (existing) {
       await this.db.runAsync(
-        `UPDATE device_info SET 
+        `UPDATE device_info SET
           device_name = COALESCE(?, device_name),
           device_type = COALESCE(?, device_type),
           api_key = COALESCE(?, api_key),
           last_sync_at = ?
         WHERE device_id = ?`,
-        [info.deviceName, info.deviceType, info.apiKey, now, this.deviceId]
+        [info.deviceName ?? null, info.deviceType ?? null, info.apiKey ?? null, now, this.deviceId ?? null]
       );
     } else {
       await this.db.runAsync(
         `INSERT INTO device_info (device_id, device_name, device_type, api_key, registered_at, last_sync_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [this.deviceId, info.deviceName, info.deviceType, info.apiKey, now, now]
+        [this.deviceId ?? null, info.deviceName ?? null, info.deviceType ?? null, info.apiKey ?? null, now, now]
       );
     }
   }
@@ -754,9 +754,9 @@ class SQLiteService {
         log.records_pushed,
         log.records_pulled,
         log.conflicts,
-        log.error_message,
+        log.error_message ?? null,
         log.started_at,
-        log.completed_at,
+        log.completed_at ?? null,
       ]
     );
     return id;
@@ -829,7 +829,7 @@ class SQLiteService {
           ", "
         )}) VALUES (${placeholders})
          ON CONFLICT(id) DO UPDATE SET ${updateClauses}`,
-        values
+        values as any
       );
     }
   }
@@ -954,11 +954,11 @@ class SQLiteService {
         produk.nama,
         produk.harga,
         produk.stok,
-        produk.kategoriId,
-        produk.gambarPath,
+        produk.kategoriId ?? null,
+        produk.gambarPath ?? null,
         now,
         now,
-        this.deviceId,
+        this.deviceId ?? null,
       ]
     );
 
@@ -1081,15 +1081,15 @@ class SQLiteService {
         id,
         kue.nama,
         kue.jenisKue,
-        kue.variasiKue,
+        kue.variasiKue ?? null,
         kue.ukuranKue,
         kue.hargaJual,
-        kue.gambarPath,
+        kue.gambarPath ?? null,
         kue.status || "tersedia",
-        kue.catatan,
+        kue.catatan ?? null,
         now,
         now,
-        this.deviceId,
+        this.deviceId ?? null,
       ]
     );
 
@@ -1365,6 +1365,17 @@ class SQLiteService {
     }
   }
 
+  async saveFile(uri: string, fileName: string, folder: string): Promise<string> {
+    const dir = `${FileSystem.documentDirectory}${folder}/`;
+    const dirInfo = await FileSystem.getInfoAsync(dir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    }
+    const dest = `${dir}${fileName}`;
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return dest;
+  }
+
   // ============================================================
   // BACKWARD COMPATIBILITY METHODS
   // ============================================================
@@ -1403,34 +1414,6 @@ class SQLiteService {
       changes: result.changes,
       insertId: result.lastInsertRowId,
     };
-  }
-
-  /**
-   * Generate unique ID
-   */
-  generateId(): string {
-    return uuid.v4().toString();
-  }
-
-  /**
-   * Get current timestamp in ISO format
-   */
-  getCurrentTimestamp(): string {
-    return new Date().toISOString();
-  }
-
-  /**
-   * Delete file (placeholder - implement with expo-file-system if needed)
-   */
-  async deleteFile(filePath: string): Promise<void> {
-    try {
-      const fileInfo = await FileSystem.getInfoAsync(filePath);
-      if (fileInfo.exists) {
-        await FileSystem.deleteAsync(filePath, { idempotent: true });
-      }
-    } catch (error) {
-      console.warn("Failed to delete file:", filePath, error);
-    }
   }
 
   /**

@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -24,11 +24,10 @@ import {
 import Toast from "react-native-toast-message";
 import BottomNavigation from "../components/BottomNavigation";
 import Button from "../components/Button";
+import EmptyState from "../components/EmptyState";
+import { SkeletonList } from "../components/SkeletonLoader";
 import { useDatabase } from "../context/DatabaseProvider";
 import { OrderWithDetails, useOrders } from "../hooks/useOrders";
-
-const { width: screenWidth } = Dimensions.get("window");
-const isTablet = screenWidth >= 768;
 
 type OrderStatus =
   | "pending"
@@ -517,7 +516,7 @@ export default function LacakPesananScreen() {
   };
 
   const renderPesananCard = (order: OrderWithDetails) => {
-    const hasImages = order.gambarReferensiPath;
+    const hasImages = order.gambarReferensi;
 
     return (
       <TouchableOpacity
@@ -551,9 +550,9 @@ export default function LacakPesananScreen() {
         {hasImages && (
           <TouchableOpacity
             style={styles.imagePreviewContainer}
-            onPress={() => handleOpenImageGallery(order.gambarReferensiPath!)}>
+            onPress={() => handleOpenImageGallery(order.gambarReferensi!)}>
             <Image
-              source={{ uri: order.gambarReferensiPath }}
+              source={{ uri: order.gambarReferensi }}
               style={styles.imagePreview}
               resizeMode="cover"
             />
@@ -566,13 +565,12 @@ export default function LacakPesananScreen() {
 
         <View style={styles.cakeInfo}>
           <Text style={styles.cakeTitle}>
-            {order.jenisKueDetail?.nama || "Unknown"} -{" "}
-            {order.variasiKueDetail?.nama || "Unknown"}
+            {order.jenisKue || "Unknown"} -{" "}
+            {order.variasiKue || "Unknown"}
           </Text>
           <Text style={styles.cakeSubtitle}>
-            {order.ukuranKueDetail?.nama || "Unknown"} •{" "}
-            {order.aksesorisDetail?.map((a) => a.nama).join(", ") ||
-              "Tanpa Aksesoris"}
+            {order.ukuranKue || "Unknown"} •{" "}
+            {order.aksesorisKue || "Tanpa Aksesoris"}
           </Text>
         </View>
 
@@ -595,7 +593,7 @@ export default function LacakPesananScreen() {
           </View>
           <View style={styles.priceInfo}>
             <Text style={styles.totalPrice}>
-              Rp {order.hargaTotal.toLocaleString("id-ID")}
+              Rp {order.totalHarga.toLocaleString("id-ID")}
             </Text>
             <View style={[styles.paymentBadge, { backgroundColor: "#EA580C" }]}>
               <Text style={styles.paymentBadgeText}>Custom</Text>
@@ -609,10 +607,14 @@ export default function LacakPesananScreen() {
   if (!isInitialized || loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat pesanan...</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Lacak Pesanan Kue</Text>
+          <View style={{ width: 38 }} />
         </View>
+        <SkeletonList count={5} />
       </SafeAreaView>
     );
   }
@@ -620,16 +622,22 @@ export default function LacakPesananScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorText}>Terjadi Kesalahan</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-          <Button
-            title="Coba Lagi"
-            onPress={refetch}
-            style={styles.retryButton}
-          />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Lacak Pesanan Kue</Text>
+          <View style={{ width: 38 }} />
         </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Terjadi Kesalahan"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={refetch}
+        />
+        <BottomNavigation currentPage="lacak-pesanan" />
       </SafeAreaView>
     );
   }
@@ -697,34 +705,31 @@ export default function LacakPesananScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.orderList}
+        data={filteredOrders}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => renderPesananCard(item)}
         contentContainerStyle={[
           styles.orderListContent,
-          {
-            paddingBottom: Platform.OS === "android" ? insets.bottom + 80 : 80,
-          },
+          filteredOrders.length === 0 && { flexGrow: 1 },
+          { paddingBottom: Platform.OS === "android" ? insets.bottom + 80 : 80 },
         ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        showsVerticalScrollIndicator={false}>
-        {filteredOrders.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="bag-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>
-              {searchTerm ? "Pesanan tidak ditemukan" : "Belum ada pesanan"}
-            </Text>
-            <Text style={styles.emptyStateDescription}>
-              {searchTerm
-                ? "Coba ubah kata kunci pencarian"
-                : "Pesanan akan muncul di sini setelah dibuat"}
-            </Text>
-          </View>
-        ) : (
-          filteredOrders.map(renderPesananCard)
-        )}
-      </ScrollView>
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={8}
+        ListEmptyComponent={
+          <EmptyState
+            icon="bag-outline"
+            title={searchTerm || filterStatus !== "semua" ? "Pesanan tidak ditemukan" : "Belum ada pesanan"}
+            description={searchTerm || filterStatus !== "semua" ? "Coba ubah kata kunci atau filter" : "Pesanan akan muncul di sini setelah dibuat dari POS"}
+          />
+        }
+      />
 
       <Modal
         visible={isDetailOpen}
@@ -760,7 +765,7 @@ export default function LacakPesananScreen() {
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>No. Telepon</Text>
                       <Text style={styles.infoValue}>
-                        {selectedPesanan.nomorTelepon}
+                        {selectedPesanan.noHp}
                       </Text>
                     </View>
                     <View style={styles.infoRow}>
@@ -791,7 +796,7 @@ export default function LacakPesananScreen() {
                 <View style={styles.detailSection}>
                   <Text style={styles.sectionTitle}>Spesifikasi Kue</Text>
                   <View style={styles.cakeSpecCard}>
-                    {selectedPesanan.gambarReferensiPath && (
+                    {selectedPesanan.gambarReferensi && (
                       <View style={styles.imagesSection}>
                         <Text style={styles.imagesSectionTitle}>
                           Gambar Referensi
@@ -800,12 +805,12 @@ export default function LacakPesananScreen() {
                           style={styles.referenceImageContainer}
                           onPress={() =>
                             handleOpenImageGallery(
-                              selectedPesanan.gambarReferensiPath!
+                              selectedPesanan.gambarReferensi!
                             )
                           }>
                           <Image
                             source={{
-                              uri: selectedPesanan.gambarReferensiPath,
+                              uri: selectedPesanan.gambarReferensi,
                             }}
                             style={styles.referenceImage}
                             resizeMode="cover"
@@ -822,27 +827,25 @@ export default function LacakPesananScreen() {
                       <View style={styles.specItem}>
                         <Text style={styles.specLabel}>Jenis Kue</Text>
                         <Text style={styles.specValue}>
-                          {selectedPesanan.jenisKueDetail?.nama || "Unknown"}
+                          {selectedPesanan.jenisKue || "Unknown"}
                         </Text>
                       </View>
                       <View style={styles.specItem}>
                         <Text style={styles.specLabel}>Variasi</Text>
                         <Text style={styles.specValue}>
-                          {selectedPesanan.variasiKueDetail?.nama || "Unknown"}
+                          {selectedPesanan.variasiKue || "Unknown"}
                         </Text>
                       </View>
                       <View style={styles.specItem}>
                         <Text style={styles.specLabel}>Ukuran</Text>
                         <Text style={styles.specValue}>
-                          {selectedPesanan.ukuranKueDetail?.nama || "Unknown"}
+                          {selectedPesanan.ukuranKue || "Unknown"}
                         </Text>
                       </View>
                       <View style={styles.specItem}>
                         <Text style={styles.specLabel}>Aksesoris</Text>
                         <Text style={styles.specValue}>
-                          {selectedPesanan.aksesorisDetail
-                            ?.map((a) => a.nama)
-                            .join(", ") || "Tanpa Aksesoris"}
+                          {selectedPesanan.aksesorisKue || "Tanpa Aksesoris"}
                         </Text>
                       </View>
                     </View>
@@ -864,48 +867,9 @@ export default function LacakPesananScreen() {
                     <View style={styles.paymentRow}>
                       <Text style={styles.paymentLabel}>Total Harga</Text>
                       <Text style={styles.paymentTotal}>
-                        Rp {selectedPesanan.hargaTotal.toLocaleString("id-ID")}
+                        Rp {selectedPesanan.totalHarga.toLocaleString("id-ID")}
                       </Text>
                     </View>
-                    {selectedPesanan.jenisKueDetail && (
-                      <View style={styles.paymentRow}>
-                        <Text style={styles.paymentLabel}>Harga Base</Text>
-                        <Text style={styles.paymentValue}>
-                          Rp{" "}
-                          {selectedPesanan.jenisKueDetail.hargaBase.toLocaleString(
-                            "id-ID"
-                          )}
-                        </Text>
-                      </View>
-                    )}
-                    {selectedPesanan.variasiKueDetail &&
-                      selectedPesanan.variasiKueDetail.hargaTambahan > 0 && (
-                        <View style={styles.paymentRow}>
-                          <Text style={styles.paymentLabel}>
-                            Harga Tambahan Variasi
-                          </Text>
-                          <Text style={styles.paymentValue}>
-                            Rp{" "}
-                            {selectedPesanan.variasiKueDetail.hargaTambahan.toLocaleString(
-                              "id-ID"
-                            )}
-                          </Text>
-                        </View>
-                      )}
-                    {selectedPesanan.aksesorisDetail &&
-                      selectedPesanan.aksesorisDetail.length > 0 && (
-                        <View style={styles.paymentRow}>
-                          <Text style={styles.paymentLabel}>
-                            Harga Aksesoris
-                          </Text>
-                          <Text style={styles.paymentValue}>
-                            Rp{" "}
-                            {selectedPesanan.aksesorisDetail
-                              .reduce((sum, acc) => sum + acc.harga, 0)
-                              .toLocaleString("id-ID")}
-                          </Text>
-                        </View>
-                      )}
                   </View>
                 </View>
 
@@ -1500,7 +1464,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   galleryImage: {
-    width: screenWidth - 40,
+    width: "90%",
     height: "80%",
   },
   statusDropdownContainer: {
@@ -1615,5 +1579,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
+  },
+  fullScreenBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  fullScreenModalContainer: {
+    flex: 1,
+    backgroundColor: "white",
+    marginTop: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden" as const,
   },
 });

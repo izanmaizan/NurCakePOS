@@ -1,9 +1,7 @@
-// components/BottomNavigation.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import React from "react";
 import {
-  Dimensions,
   Platform,
   StyleSheet,
   Text,
@@ -11,137 +9,63 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const { width: screenWidth } = Dimensions.get("window");
+import { useResponsive } from "../hooks/useResponsive";
 
 interface BottomNavProps {
   currentPage?: string;
 }
 
+const tabs = [
+  { id: "pos", name: "POS", icon: "storefront" as keyof typeof Ionicons.glyphMap, route: "/pos" },
+  { id: "buku-pesanan", name: "Pesanan", icon: "book" as keyof typeof Ionicons.glyphMap, route: "/buku-pesanan" },
+  { id: "lacak-pesanan", name: "Lacak", icon: "search" as keyof typeof Ionicons.glyphMap, route: "/lacak-pesanan" },
+  { id: "kelola-produk", name: "Produk", icon: "cube" as keyof typeof Ionicons.glyphMap, route: "/kelola-produk" },
+  { id: "kelola-harga", name: "Harga", icon: "pricetag" as keyof typeof Ionicons.glyphMap, route: "/kelola-harga" },
+  { id: "laporan", name: "Laporan", icon: "bar-chart" as keyof typeof Ionicons.glyphMap, route: "/laporan" },
+];
+
 export default function BottomNavigation({ currentPage }: BottomNavProps) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-
-  const tabs = [
-    {
-      id: "pos",
-      name: "POS",
-      icon: "storefront" as keyof typeof Ionicons.glyphMap,
-      route: "/pos",
-    },
-    {
-      id: "buku-pesanan",
-      name: "Pesanan",
-      icon: "book" as keyof typeof Ionicons.glyphMap,
-      route: "/buku-pesanan",
-    },
-    {
-      id: "lacak-pesanan",
-      name: "Lacak",
-      icon: "search" as keyof typeof Ionicons.glyphMap,
-      route: "/lacak-pesanan",
-    },
-    {
-      id: "kelola-produk",
-      name: "Produk",
-      icon: "cube" as keyof typeof Ionicons.glyphMap,
-      route: "/kelola-produk",
-    },
-    {
-      id: "kelola-harga",
-      name: "Harga",
-      icon: "pricetag" as keyof typeof Ionicons.glyphMap,
-      route: "/kelola-harga",
-    },
-    {
-      id: "laporan",
-      name: "Laporan",
-      icon: "bar-chart" as keyof typeof Ionicons.glyphMap,
-      route: "/laporan",
-    },
-  ];
+  const { isLandscape } = useResponsive();
 
   const handleTabPress = (route: string) => {
     try {
       router.push(route as any);
-    } catch (error) {
-      console.error("Navigation error:", error);
-      // Fallback to replace
+    } catch {
       router.replace(route as any);
     }
   };
 
   const isActive = (tabId: string, route: string) => {
-    // Check both currentPage prop and pathname
     if (currentPage === tabId) return true;
-    if (pathname === route) return true;
-
-    // Additional check for root routes
-    if (
-      route === "/pos" &&
-      (pathname === "/pos" || pathname.startsWith("/pos"))
-    )
-      return true;
-    if (
-      route === "/buku-pesanan" &&
-      (pathname === "/buku-pesanan" || pathname.startsWith("/buku-pesanan"))
-    )
-      return true;
-    if (
-      route === "/lacak-pesanan" &&
-      (pathname === "/lacak-pesanan" || pathname.startsWith("/lacak-pesanan"))
-    )
-      return true;
-    if (
-      route === "/kelola-produk" &&
-      (pathname === "/kelola-produk" || pathname.startsWith("/kelola-produk"))
-    )
-      return true;
-    if (
-      route === "/kelola-harga" &&
-      (pathname === "/kelola-harga" || pathname.startsWith("/kelola-harga"))
-    )
-      return true;
-    if (
-      route === "/laporan" &&
-      (pathname === "/laporan" || pathname.startsWith("/laporan"))
-    )
-      return true;
-
-    return false;
+    return pathname === route || pathname.startsWith(route + "/");
   };
 
+  const pb = Platform.OS === "android" ? insets.bottom + 3 : insets.bottom || 3;
+
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          paddingBottom:
-            Platform.OS === "android" ? insets.bottom + 8 : insets.bottom || 8,
-        },
-      ]}>
+    <View style={[styles.container, { paddingBottom: pb }]}>
       {tabs.map((tab) => {
         const active = isActive(tab.id, tab.route);
         return (
           <TouchableOpacity
             key={tab.id}
-            style={styles.tab}
+            style={[styles.tab, isLandscape && styles.tabLandscape]}
             onPress={() => handleTabPress(tab.route)}
             activeOpacity={0.7}>
-            <View
-              style={[
-                styles.iconContainer,
-                active && styles.activeIconContainer,
-              ]}>
+            <View style={[styles.iconContainer, active && styles.activeIconContainer, isLandscape && styles.iconContainerLandscape]}>
               <Ionicons
                 name={tab.icon}
-                size={18}
+                size={isLandscape ? 15 : 16}
                 color={active ? "#EA580C" : "#6B7280"}
               />
             </View>
-            <Text style={[styles.label, active && styles.activeLabel]}>
-              {tab.name}
-            </Text>
+            {!isLandscape && (
+              <Text style={[styles.label, active && styles.activeLabel]}>
+                {tab.name}
+              </Text>
+            )}
           </TouchableOpacity>
         );
       })}
@@ -151,40 +75,41 @@ export default function BottomNavigation({ currentPage }: BottomNavProps) {
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: "row",
     backgroundColor: "white",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
-    paddingTop: 8,
+    paddingTop: 5,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 16,
-    zIndex: 1000, // Ensure it's above other components
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 12,
   },
   tab: {
     flex: 1,
     alignItems: "center",
+    paddingVertical: 3,
+  },
+  tabLandscape: {
     paddingVertical: 4,
   },
   iconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 1,
+  },
+  iconContainerLandscape: {
+    marginBottom: 0,
   },
   activeIconContainer: {
     backgroundColor: "#FED7AA",
   },
   label: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#6B7280",
     fontWeight: "500",
     textAlign: "center",

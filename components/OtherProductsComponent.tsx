@@ -1,9 +1,9 @@
 // components/OtherProductsComponent.tsx - Fixed with Real-time Stock Management
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+// Dimensions removed — using static values for card widths
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   Modal,
   Platform,
@@ -16,39 +16,29 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
-import { useProducts } from "../hooks/useProducts";
+import EmptyState from "./EmptyState";
+import { SkeletonList } from "./SkeletonLoader";
+import { useResponsive } from "../hooks/useResponsive";
+import { ProductWithCategory, useProducts } from "../hooks/useProducts";
 
-const { width: screenWidth } = Dimensions.get("screen");
-const isTablet = screenWidth >= 768;
-
-interface Product {
-  id: string;
-  nama: string;
-  harga: number;
-  stok: number;
-  kategori: {
-    id: string;
-    nama: string;
-  };
-  gambarPath?: string;
-  dibuat: Date;
-  diperbarui: Date;
-}
 
 interface OtherProductsComponentProps {
-  onAddToTransaction: (product: Product, quantity: number) => void;
+  onAddToTransaction: (product: ProductWithCategory, quantity: number) => void;
   transactionItems?: Array<{
     id: string;
     name: string;
     quantity: number;
     type: string;
   }>;
+  numColumns?: number;
 }
 
 export default function OtherProductsComponent({
   onAddToTransaction,
   transactionItems = [],
+  numColumns = 2,
 }: OtherProductsComponentProps) {
+  const { isLandscape } = useResponsive();
   const {
     products,
     categories,
@@ -62,54 +52,56 @@ export default function OtherProductsComponent({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [quantity, setQuantity] = useState(1);
 
-  // Filter products berdasarkan search dan kategori
+  // Filter products berdasarkan search dan kategori — debounce 300ms
   useEffect(() => {
-    const filterProducts = async () => {
+    const timer = setTimeout(async () => {
       if (searchTerm.trim() || selectedCategory) {
         try {
           const filtered = await searchProducts(searchTerm, selectedCategory);
           setFilteredProducts(filtered);
-        } catch (error) {
-          console.error("Error filtering products:", error);
+        } catch {
           setFilteredProducts(products);
         }
       } else {
         setFilteredProducts(products);
       }
-    };
+    }, 300);
 
-    filterProducts();
+    return () => clearTimeout(timer);
   }, [products, searchTerm, selectedCategory]);
 
   // Get quantity already in transaction for a product
   const getTransactionQuantity = (productId: string): number => {
-    const transactionItem = transactionItems.find(
-      (item) => item.id.includes(productId) && item.type === "produk_lainnya"
-    );
-    return transactionItem?.quantity || 0;
+    return transactionItems
+      .filter(
+        (item) =>
+          item.id.startsWith(`produk_${productId}_`) &&
+          item.type === "produk_lainnya"
+      )
+      .reduce((sum, item) => sum + item.quantity, 0);
   };
 
   // Get available stock (actual stock - quantity in transaction)
-  const getAvailableStock = (product: Product): number => {
+  const getAvailableStock = (product: ProductWithCategory): number => {
     const inTransaction = getTransactionQuantity(product.id);
     return product.stok - inTransaction;
   };
 
   // Check if product can be added to transaction
   const canAddToTransaction = (
-    product: Product,
+    product: ProductWithCategory,
     requestedQuantity: number = 1
   ): boolean => {
     const availableStock = getAvailableStock(product);
     return availableStock >= requestedQuantity;
   };
 
-  const handleQuickAdd = (product: Product) => {
+  const handleQuickAdd = (product: ProductWithCategory) => {
     if (!canAddToTransaction(product, 1)) {
       Toast.show({
         type: "warning",
@@ -146,7 +138,7 @@ export default function OtherProductsComponent({
     setShowDetailModal(false);
   };
 
-  const handleShowDetail = async (product: Product) => {
+  const handleShowDetail = async (product: ProductWithCategory) => {
     // Get latest product data
     const latestProduct = await getProductById(product.id);
     if (latestProduct) {
@@ -208,14 +200,16 @@ export default function OtherProductsComponent({
   };
 
   // Render product card
-  const renderProductCard = (product: Product) => {
+  const renderProductCard = (product: ProductWithCategory) => {
     const availableStock = getAvailableStock(product);
     const inTransaction = getTransactionQuantity(product.id);
     const stockColor = getStockBadgeColor(availableStock, product.stok);
     const stockText = getStockBadgeText(availableStock, product.stok);
+    const compact = isLandscape;
+    const cardWidth = numColumns === 4 ? "23%" : numColumns === 3 ? "31%" : "48%";
 
     return (
-      <View key={product.id} style={styles.productCard}>
+      <View key={product.id} style={[styles.productCard, { width: cardWidth }, compact && { padding: 7, minHeight: 180 }]}>
         {/* In Transaction Badge */}
         {inTransaction > 0 && (
           <View style={styles.inTransactionBadge}>
@@ -228,7 +222,7 @@ export default function OtherProductsComponent({
 
         {/* Product Image */}
         <TouchableOpacity
-          style={styles.productImage}
+          style={[styles.productImage, compact && { height: 70 }]}
           onPress={() => handleShowDetail(product)}
           activeOpacity={0.7}>
           {product.gambarPath ? (
@@ -239,45 +233,46 @@ export default function OtherProductsComponent({
             />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Ionicons name="cube" size={isTablet ? 40 : 30} color="#9CA3AF" />
+              <Ionicons name="cube" size={compact ? 22 : 30} color="#9CA3AF" />
             </View>
           )}
         </TouchableOpacity>
 
         {/* Product Info */}
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
+        <View style={[styles.productInfo, compact && { gap: 2 }]}>
+          <Text style={[styles.productName, compact && { fontSize: 11 }]} numberOfLines={2}>
             {product.nama}
           </Text>
-          <Text style={styles.productCategory} numberOfLines={1}>
-            {product.kategori.nama}
+          <Text style={[styles.productCategory, compact && { fontSize: 10 }]} numberOfLines={1}>
+            {product.kategoriNama || "-"}
           </Text>
-          <Text style={styles.productPrice}>
+          <Text style={[styles.productPrice, compact && { fontSize: 12 }]}>
             Rp {product.harga.toLocaleString("id-ID")}
           </Text>
 
           {/* Stock Badge */}
-          <View style={[styles.stockBadge, { backgroundColor: stockColor }]}>
-            <Text style={styles.stockText}>{stockText}</Text>
+          <View style={[styles.stockBadge, { backgroundColor: stockColor }, compact && { paddingVertical: 2, paddingHorizontal: 5 }]}>
+            <Text style={[styles.stockText, compact && { fontSize: 9 }]}>{stockText}</Text>
           </View>
 
           {/* Action Buttons */}
-          <View style={styles.productActions}>
+          <View style={[styles.productActions, compact && { marginTop: 4 }]}>
             <TouchableOpacity
               style={styles.detailButton}
               onPress={() => handleShowDetail(product)}>
-              <Ionicons name="information-circle" size={16} color="#6B7280" />
+              <Ionicons name="information-circle" size={compact ? 14 : 16} color="#6B7280" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.addButton,
                 availableStock === 0 && styles.addButtonDisabled,
+                compact && { paddingVertical: 4, paddingHorizontal: 8 },
               ]}
               onPress={() => handleQuickAdd(product)}
               disabled={availableStock === 0}>
-              <Ionicons name="add" size={16} color="white" />
-              <Text style={styles.addButtonText}>
+              <Ionicons name="add" size={compact ? 13 : 16} color="white" />
+              <Text style={[styles.addButtonText, compact && { fontSize: 10 }]}>
                 {availableStock > 0 ? "Tambah" : "Habis"}
               </Text>
             </TouchableOpacity>
@@ -289,46 +284,43 @@ export default function OtherProductsComponent({
 
   if (loading) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Produk Lainnya</Text>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat produk...</Text>
-        </View>
+      <View style={[styles.section, isLandscape && { padding: 10, marginBottom: 10 }]}>
+        <Text style={[styles.sectionTitle, isLandscape && { fontSize: 13 }]}>Produk Lainnya</Text>
+        <SkeletonList count={4} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Produk Lainnya</Text>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={24} color="#EF4444" />
-          <Text style={styles.errorText}>Gagal memuat produk</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-            <Text style={styles.retryButtonText}>Coba Lagi</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.section, isLandscape && { padding: 10, marginBottom: 10 }]}>
+        <Text style={[styles.sectionTitle, isLandscape && { fontSize: 13 }]}>Produk Lainnya</Text>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Gagal memuat produk"
+          description={error}
+          actionLabel="Coba Lagi"
+          onAction={refetch}
+        />
       </View>
     );
   }
 
   return (
     <>
-      <View style={styles.section}>
+      <View style={[styles.section, isLandscape && { padding: 10, marginBottom: 10 }]}>
         {/* Search and Filter */}
-        <View style={styles.searchFilterContainer}>
-          <View style={styles.searchContainer}>
+        <View style={[styles.searchFilterContainer, isLandscape && { marginBottom: 8 }]}>
+          <View style={[styles.searchContainer, isLandscape && { height: 34 }]}>
             <Ionicons
               name="search"
-              size={20}
+              size={isLandscape ? 16 : 20}
               color="#9CA3AF"
               style={styles.searchIcon}
             />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, isLandscape && { fontSize: 12 }]}
               value={searchTerm}
               onChangeText={setSearchTerm}
               placeholder="Cari produk..."
@@ -415,28 +407,15 @@ export default function OtherProductsComponent({
 
         {/* Products Grid */}
         {filteredProducts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>
-              {searchTerm || selectedCategory
-                ? "Produk tidak ditemukan"
-                : "Belum ada produk"}
-            </Text>
-            <Text style={styles.emptyStateDescription}>
-              {searchTerm || selectedCategory
-                ? "Coba ubah kata kunci atau filter pencarian"
-                : "Tambahkan produk untuk mulai berjualan"}
-            </Text>
-            {(searchTerm || selectedCategory) && (
-              <TouchableOpacity
-                onPress={resetFilters}
-                style={styles.resetButton}>
-                <Text style={styles.resetButtonText}>Reset Filter</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <EmptyState
+            icon="cube-outline"
+            title={searchTerm || selectedCategory ? "Produk tidak ditemukan" : "Belum ada produk"}
+            description={searchTerm || selectedCategory ? "Coba ubah kata kunci atau filter pencarian" : "Tambahkan produk untuk mulai berjualan"}
+            actionLabel={searchTerm || selectedCategory ? "Reset Filter" : undefined}
+            onAction={searchTerm || selectedCategory ? resetFilters : undefined}
+          />
         ) : (
-          <View style={styles.productsGrid}>
+          <View style={[styles.productsGrid, isLandscape && { gap: 8 }]}>
             {filteredProducts.map(renderProductCard)}
           </View>
         )}
@@ -485,7 +464,7 @@ export default function OtherProductsComponent({
               <View style={styles.infoSection}>
                 <Text style={styles.productName}>{selectedProduct.nama}</Text>
                 <Text style={styles.productCategory}>
-                  Kategori: {selectedProduct.kategori.nama}
+                  Kategori: {selectedProduct.kategoriNama || "-"}
                 </Text>
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Harga:</Text>
@@ -511,12 +490,6 @@ export default function OtherProductsComponent({
                 </View>
               </View>
 
-              {selectedProduct.notes ? (
-                <View style={styles.notesSection}>
-                  <Text style={styles.sectionTitle}>Catatan:</Text>
-                  <Text style={styles.notesText}>{selectedProduct.notes}</Text>
-                </View>
-              ) : null}
 
               <View style={styles.quantitySection}>
                 <Text style={styles.sectionTitle}>Quantity</Text>
@@ -588,13 +561,13 @@ export default function OtherProductsComponent({
               style={[
                 styles.addToCartButton,
                 !canAddToTransaction(
-                  selectedProduct || { stok: 0 },
+                  selectedProduct ?? ({ stok: 0 } as ProductWithCategory),
                   quantity
                 ) && styles.addToCartButtonDisabled,
               ]}
               onPress={handleAddToTransaction}
               disabled={
-                !canAddToTransaction(selectedProduct || { stok: 0 }, quantity)
+                !canAddToTransaction(selectedProduct ?? ({ stok: 0 } as ProductWithCategory), quantity)
               }>
               <Ionicons name="add" size={16} color="white" />
               <Text style={styles.addToCartButtonText}>
@@ -871,7 +844,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   productCard: {
-    width: isTablet ? "18%" : "48%",
+    width: "48%",
     backgroundColor: "white",
     borderRadius: 8,
     padding: 12,
@@ -946,7 +919,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   productPrice: {
-    fontSize: isTablet ? 16 : 15,
+    fontSize: 15,
     fontWeight: "bold",
     color: "#2563EB",
     textAlign: "center",

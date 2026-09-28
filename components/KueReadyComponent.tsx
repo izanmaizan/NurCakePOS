@@ -5,7 +5,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Image,
   Modal,
   ScrollView,
@@ -20,13 +19,14 @@ import Toast from "react-native-toast-message";
 import { sqliteService } from "../database/SQLiteService";
 import { KueReadyForm, KueReadyItem, useKueReady } from "../hooks/useKueReady";
 import { usePricing } from "../hooks/usePricing";
-
-const { width: screenWidth } = Dimensions.get("screen");
-const isTablet = screenWidth >= 768;
+import { useResponsive } from "../hooks/useResponsive";
+import EmptyState from "./EmptyState";
+import { SkeletonList } from "./SkeletonLoader";
 
 interface KueReadyComponentProps {
   onAddToTransaction: (kueReady: KueReadyItem, cakeName: string) => void;
   selectedKueReadyIds: string[];
+  numColumns?: number;
 }
 
 // Improved Dropdown Component
@@ -128,7 +128,9 @@ const PricingDropdown: React.FC<{
 export default function KueReadyComponent({
   onAddToTransaction,
   selectedKueReadyIds,
+  numColumns = 2,
 }: KueReadyComponentProps) {
+  const { isWide, isLandscape } = useResponsive();
   const { kueReadyList, loading, error, addKueReady, deleteKueReady, refetch } =
     useKueReady();
   const { masterKriteria } = usePricing();
@@ -337,15 +339,9 @@ export default function KueReadyComponent({
         <View style={styles.sectionHeaderContainer}>
           <View style={styles.sectionInfo}>
             <Text style={styles.sectionTitle}>Kue Ready</Text>
-            <Text style={styles.sectionDescription}>
-              Memuat data kue ready...
-            </Text>
           </View>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EA580C" />
-          <Text style={styles.loadingText}>Memuat kue ready...</Text>
-        </View>
+        <SkeletonList count={3} />
       </View>
     );
   }
@@ -356,52 +352,45 @@ export default function KueReadyComponent({
         <View style={styles.sectionHeaderContainer}>
           <View style={styles.sectionInfo}>
             <Text style={styles.sectionTitle}>Kue Ready</Text>
-            <Text style={styles.sectionDescription}>
-              Gagal memuat data kue ready
-            </Text>
           </View>
         </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#EF4444" />
-          <Text style={styles.errorText}>Gagal memuat data</Text>
-          <Text style={styles.errorDescription}>{error}</Text>
-        </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          iconColor="#EF4444"
+          title="Gagal memuat kue ready"
+          description={error}
+        />
       </View>
     );
   }
 
+  const compact = isLandscape;
+  const cardWidth = numColumns === 4 ? "23%" : numColumns === 3 ? "31%" : "48%";
+
   return (
     <>
       {/* Main Card */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderContainer}>
+      <View style={[styles.section, compact && { padding: 10, marginBottom: 10 }]}>
+        <View style={[styles.sectionHeaderContainer, compact && { marginBottom: 8 }]}>
           <View style={styles.sectionInfo}>
-            <Text style={styles.sectionTitle}>Kue Ready</Text>
-            {/* <Text style={styles.sectionDescription}>
-              {availableKueReady.length} kue tersedia
-              {selectedKueReadyIds.length > 0 && ` • ${selectedKueReadyIds.length} dalam transaksi`}
-            </Text> */}
+            <Text style={[styles.sectionTitle, compact && { fontSize: 13 }]}>Kue Ready</Text>
           </View>
           <TouchableOpacity
-            style={styles.addButton}
+            style={[styles.addButton, compact && { paddingVertical: 6, paddingHorizontal: 10 }]}
             onPress={() => setShowAddModal(true)}>
-            <Ionicons name="add" size={isTablet ? 20 : 16} color="white" />
-            <Text style={styles.addButtonText}>
-              {isTablet ? "Tambah Kue Ready" : "Tambah"}
-            </Text>
+            <Ionicons name="add" size={14} color="white" />
+            <Text style={[styles.addButtonText, compact && { fontSize: 11 }]}>Tambah</Text>
           </TouchableOpacity>
         </View>
 
         {availableKueReady.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="cafe-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateText}>Belum ada kue ready</Text>
-            <Text style={styles.emptyStateDescription}>
-              Tambahkan kue ready pertama Anda!
-            </Text>
-          </View>
+          <EmptyState
+            icon="cafe-outline"
+            title="Belum ada kue ready"
+            description="Tambahkan kue ready pertama dengan tombol di atas"
+          />
         ) : (
-          <View style={styles.kueReadyGrid}>
+          <View style={[styles.kueReadyGrid, compact && { gap: 8 }]}>
             {availableKueReady.map((kue) => {
               const isSelected = isKueSelected(kue.id);
 
@@ -410,7 +399,9 @@ export default function KueReadyComponent({
                   key={kue.id}
                   style={[
                     styles.kueReadyCard,
+                    { width: cardWidth },
                     isSelected && styles.kueReadyCardSelected,
+                    compact && { minHeight: 170, padding: 8 },
                   ]}>
                   {isSelected && (
                     <View style={styles.statusBadgeContainer}>
@@ -455,7 +446,7 @@ export default function KueReadyComponent({
                       <View style={styles.imagePlaceholder}>
                         <Ionicons
                           name="image-outline"
-                          size={isTablet ? 32 : 24}
+                          size={24}
                           color="#9CA3AF"
                         />
                         <Text style={styles.imagePlaceholderText}>
@@ -501,7 +492,7 @@ export default function KueReadyComponent({
                           size={14}
                           color={isSelected ? "#9CA3AF" : "#6B7280"}
                         />
-                        {isTablet && (
+                        {isWide && (
                           <Text
                             style={[
                               styles.detailButtonText,
@@ -1087,9 +1078,9 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
   sectionHeaderContainer: {
-    flexDirection: isTablet ? "row" : "column",
+    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: isTablet ? "center" : "flex-start",
+    alignItems: "center",
     marginBottom: 16,
     gap: 12,
   },
@@ -1111,11 +1102,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#16A34A",
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: isTablet ? 10 : 8,
-    paddingHorizontal: isTablet ? 16 : 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
     gap: 6,
-    minWidth: isTablet ? undefined : 100,
+    minWidth: 100,
     justifyContent: "center",
     shadowColor: "#16A34A",
     shadowOffset: { width: 0, height: 2 },
@@ -1125,7 +1116,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: "white",
-    fontSize: isTablet ? 14 : 12,
+    fontSize: 12,
     fontWeight: "600",
   },
   loadingContainer: {
@@ -1157,17 +1148,17 @@ const styles = StyleSheet.create({
   kueReadyGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: isTablet ? 16 : 12,
-    justifyContent: "flex-start",
+    gap: 10,
+    justifyContent: "space-between",
   },
   kueReadyCard: {
-    width: isTablet ? (screenWidth - 80) / 5 - 16 : (screenWidth - 64) / 2 - 6,
+    width: "48%",
     backgroundColor: "white",
     borderRadius: 12,
-    padding: isTablet ? 12 : 10,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    minHeight: isTablet ? 260 : 220,
+    minHeight: 210,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -1224,7 +1215,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   imagePlaceholderText: {
-    fontSize: isTablet ? 11 : 10,
+    fontSize: 10,
     color: "#9CA3AF",
     marginTop: 4,
     textAlign: "center",
@@ -1244,7 +1235,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   kueName: {
-    fontSize: isTablet ? 14 : 13,
+    fontSize: 13,
     fontWeight: "600",
     color: "#111827",
     textAlign: "center",
@@ -1256,7 +1247,7 @@ const styles = StyleSheet.create({
     color: "#9A3412",
   },
   kuePrice: {
-    fontSize: isTablet ? 18 : 16,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#16A34A",
     textAlign: "center",
@@ -1310,7 +1301,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   selectButtonText: {
-    fontSize: isTablet ? 12 : 11,
+    fontSize: 11,
     color: "white",
     fontWeight: "600",
   },

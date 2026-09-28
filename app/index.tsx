@@ -12,9 +12,8 @@ export default function SplashScreen() {
   //   router.replace("/login");
   // }, 2000);
   useEffect(() => {
-    // Redirect to pos after 2 seconds
     const timer = setTimeout(() => {
-      router.replace("/pos");
+      router.replace("/login");
     }, 2000);
 
     return () => clearTimeout(timer);
@@ -44,7 +43,7 @@ export default function SplashScreen() {
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Memuat aplikasi...</Text>
           <Text style={styles.redirectText}>
-            Anda akan diarahkan ke halaman pos dalam beberapa detik
+            Anda akan diarahkan ke halaman login dalam beberapa detik
           </Text>
         </View>
 

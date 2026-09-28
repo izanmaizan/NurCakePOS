@@ -4,7 +4,6 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,15 +20,13 @@ import CustomCakeComponent from "../components/CustomCakeComponent";
 import KueReadyComponent from "../components/KueReadyComponent";
 import OtherProductsComponent from "../components/OtherProductsComponent";
 import TransactionComponent from "../components/TransactionComponent";
-import { useKueReady } from "../hooks/useKueReady";
+import { KueReadyItem, useKueReady } from "../hooks/useKueReady";
 import { useOrders } from "../hooks/useOrders";
 import { usePricing } from "../hooks/usePricing";
-import { useProducts } from "../hooks/useProducts";
+import { ProductWithCategory, useProducts } from "../hooks/useProducts";
 import { useTransactions } from "../hooks/useTransactions";
 import { CartItem } from "../repositories/TransactionRepository";
-
-const { width: screenWidth } = Dimensions.get("screen");
-const isTablet = screenWidth >= 768;
+import { useResponsive } from "../hooks/useResponsive";
 
 // Interface untuk item dalam transaksi
 interface TransactionItem {
@@ -67,34 +64,12 @@ interface AdditionalCost {
 }
 
 // Interface untuk produk lainnya
-interface Product {
-  id: string;
-  nama: string;
-  harga: number;
-  stok: number;
-  kategori: {
-    id: string;
-    nama: string;
-  };
-  gambarPath?: string;
-}
-
 // Interface untuk kue ready
-interface KueReady {
-  id: string;
-  nama: string;
-  jenisKue: string;
-  variasiKue: string;
-  ukuranKue: string;
-  hargaJual: number;
-  gambarPath?: string;
-  status: "available" | "unavailable";
-  catatan?: string;
-}
 
 export default function POSScreen() {
   const insets = useSafeAreaInsets();
-  
+  const { isWide, isLandscape } = useResponsive();
+
   // Hooks untuk data management
   const { deleteKueReady } = useKueReady();
   const { products, refetch: refetchProducts } = useProducts();
@@ -109,7 +84,11 @@ export default function POSScreen() {
   const [transactionItems, setTransactionItems] = useState<TransactionItem[]>([]);
   const [showCustomCakeModal, setShowCustomCakeModal] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [showTransactionPanel, setShowTransactionPanel] = useState(true);
   const [selectedKueReadyIds, setSelectedKueReadyIds] = useState<string[]>([]);
+
+  // Kolom grid: 4 saat panel tersembunyi (landscape full), 2 saat panel terbuka
+  const numColumns = isWide && !showTransactionPanel ? 4 : 2;
 
   // Update waktu setiap detik untuk display real-time
   useEffect(() => {
@@ -179,14 +158,17 @@ export default function POSScreen() {
    * Hapus item dari transaksi dan update selectedKueReadyIds
    */
   const removeFromTransaction = (itemId: string) => {
-    setTransactionItems((items) => items.filter((item) => item.id !== itemId));
-    setSelectedKueReadyIds((ids) => ids.filter((id) => !itemId.includes(id)));
+    const item = transactionItems.find((i) => i.id === itemId);
+    setTransactionItems((items) => items.filter((i) => i.id !== itemId));
+    if (item?.kueReadyId) {
+      setSelectedKueReadyIds((ids) => ids.filter((id) => id !== item.kueReadyId));
+    }
   };
 
   /**
    * Tambah produk lainnya ke transaksi dengan validasi stok
    */
-  const addProductToTransaction = (product: Product, quantity: number = 1) => {
+  const addProductToTransaction = (product: ProductWithCategory, quantity: number = 1) => {
     if (!product || !product.harga || typeof product.harga !== 'number') {
       Toast.show({
         type: "error",
@@ -250,7 +232,7 @@ export default function POSScreen() {
   /**
    * Tambah kue ready ke transaksi (unlimited, tidak ada validasi stok)
    */
-  const addKueReadyToTransaction = (kueReady: KueReady, cakeName: string) => {
+  const addKueReadyToTransaction = (kueReady: KueReadyItem, cakeName: string) => {
     const totalPrice = kueReady.hargaJual || 0;
     const uniqueId = `ready_${kueReady.id}_${Date.now()}`;
     
@@ -322,66 +304,39 @@ export default function POSScreen() {
    * 5. Refetch products untuk update stok
    * 6. Clear semua state dan refresh UI
    */
-  const processTransaction = async (orderData: any) => {
-    if (transactionItems.length === 0) {
-      Toast.show({ 
-        type: "error", 
-        text1: "Error", 
-        text2: "Transaksi kosong" 
-      });
-      return;
-    }
-
+  const executeTransaction = async (orderData: any) => {
     try {
       setProcessing(true);
 
-      // Pisahkan items berdasarkan tipe untuk proses berbeda
       const productItems = transactionItems.filter(item => item.type === "produk_lainnya");
       const customCakeItems = transactionItems.filter(item => item.type === "kue_custom");
       const kueReadyItems = transactionItems.filter(item => item.type === "kue_ready");
 
-      // Mapping items ke format CartItem untuk repository
-      const mappedTransactionItems: CartItem[] = productItems.map((item) => ({
-        produkId: item.productId!,
-        namaProduk: item.name,
-        hargaSatuan: item.unitPrice,
-        jumlah: item.quantity,
-        subtotal: item.subtotal,
-      }));
-
-      const customCakeTransactionItems: CartItem[] = customCakeItems.map((item) => ({
-        produkId: item.id,
-        namaProduk: item.name,
-        hargaSatuan: item.unitPrice,
-        jumlah: item.quantity,
-        subtotal: item.subtotal,
-      }));
-
-      const kueReadyTransactionItems: CartItem[] = kueReadyItems.map((item) => ({
-        produkId: item.kueReadyId || item.id,
-        namaProduk: item.name,
-        hargaSatuan: item.unitPrice,
-        jumlah: item.quantity,
-        subtotal: item.subtotal,
-      }));
-
-      // Gabungkan semua items untuk transaksi
-      const allTransactionItems = [
-        ...mappedTransactionItems,
-        ...customCakeTransactionItems,
-        ...kueReadyTransactionItems,
+      const allTransactionItems: CartItem[] = [
+        ...productItems.map(item => ({
+          produkId: item.productId!,
+          namaProduk: item.name,
+          hargaSatuan: item.unitPrice,
+          jumlah: item.quantity,
+          subtotal: item.subtotal,
+        })),
+        ...customCakeItems.map(item => ({
+          produkId: item.id,
+          namaProduk: item.name,
+          hargaSatuan: item.unitPrice,
+          jumlah: item.quantity,
+          subtotal: item.subtotal,
+        })),
+        ...kueReadyItems.map(item => ({
+          produkId: item.kueReadyId || item.id,
+          namaProduk: item.name,
+          hargaSatuan: item.unitPrice,
+          jumlah: item.quantity,
+          subtotal: item.subtotal,
+        })),
       ];
 
-      const totalHarga = allTransactionItems.reduce((sum, item) => sum + item.subtotal, 0);
-
-      console.log("💾 Saving Transaction:", {
-        totalItems: allTransactionItems.length,
-        totalHarga,
-        customCakeItems: customCakeItems.length,
-        kueReadyItems: kueReadyItems.length,
-      });
-
-      // STEP 1: Simpan transaksi ke database
+      // STEP 1: Simpan transaksi
       const transactionResult = await createTransaction({
         items: allTransactionItems,
         metodePembayaran: orderData.paymentMethod || "cash",
@@ -389,128 +344,106 @@ export default function POSScreen() {
         namaPelanggan: customerName || orderData.customerName || "",
       });
 
-      console.log("✅ Transaction Saved:", transactionResult.nomorTransaksi);
-
-      // STEP 2: Simpan custom cake orders ke buku pesanan
+      // STEP 2: Simpan pesanan kue custom ke buku pesanan
       for (const customCakeItem of customCakeItems) {
         if (!customCakeItem.customDetails) continue;
-
         const details = customCakeItem.customDetails;
-        
-        // Cari ID dari master data berdasarkan nama
-        const jenisKue = masterKriteria?.jenisKue?.find(
-          (k: any) => k.nama === details.cakeType
-        );
-        const variasiKue = masterKriteria?.variasiKue?.find(
-          (k: any) => k.nama === details.variation
-        );
-        const ukuranKue = masterKriteria?.ukuranKue?.find(
-          (k: any) => k.nama === details.size
-        );
-        const kotakKue = masterKriteria?.kotakKue?.find(
-          (k: any) => k.nama === details.box
-        );
 
-        if (!jenisKue || !variasiKue || !ukuranKue || !kotakKue) {
-          console.warn("⚠️ Missing master data for custom cake:", details);
-          continue;
-        }
+        const jenisKue = masterKriteria?.jenisKue?.find((k: any) => k.nama === details.cakeType);
+        const variasiKue = masterKriteria?.variasiKue?.find((k: any) => k.nama === details.variation);
+        const ukuranKue = masterKriteria?.ukuranKue?.find((k: any) => k.nama === details.size);
+        const kotakKue = masterKriteria?.kotakKue?.find((k: any) => k.nama === details.box);
 
-        // Tentukan status order berdasarkan tanggal pickup
-        let orderStatus = "ready";
+        if (!jenisKue || !variasiKue || !ukuranKue || !kotakKue) continue;
+
         let pickupDate = new Date();
+        let orderStatus = "ready";
 
         if (orderData.pickupDate) {
           pickupDate = new Date(orderData.pickupDate);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           pickupDate.setHours(0, 0, 0, 0);
-
-          if (pickupDate > today) {
-            orderStatus = "pending";
-          } else {
-            orderStatus = "ready";
-          }
+          orderStatus = pickupDate > today ? "pending" : "ready";
         }
-
-        console.log("📋 Creating Order for Custom Cake:", {
-          name: customCakeItem.name,
-          status: orderStatus,
-          pickupDate: pickupDate.toISOString(),
-        });
 
         try {
           const orderResult = await createOrder({
             namaPelanggan: customerName || orderData.customerName || "Guest",
-            nomorTelepon: orderData.phoneNumber || "000000000000",
+            noHp: orderData.phoneNumber || "",
             jenisKue: jenisKue.id,
             variasiKue: variasiKue.id,
             ukuranKue: ukuranKue.id,
-            aksesoris: kotakKue.id,
-            tanggalAmbil: pickupDate,
+            kotakKue: kotakKue.id,
+            tanggalAmbil: pickupDate.toISOString().split("T")[0],
             catatan: details.notes || notes || "",
-            gambarReferensiPath: details.images?.[0],
+            gambarReferensi: details.images?.[0],
+            totalHarga: customCakeItem.subtotal,
           });
-
-          // Update status jika bukan pending
           if (orderStatus !== "pending") {
             await updateOrderStatus(orderResult.id, orderStatus);
-            console.log(`✅ Order status set to: ${orderStatus}`);
           }
-
-          console.log("✅ Order Created:", orderResult.nomorPesanan);
         } catch (orderError) {
-          console.error("❌ Failed to create order:", orderError);
+          console.error("Gagal buat order kue custom:", orderError);
         }
       }
 
-      // STEP 3: Hapus kue ready yang sudah terjual dari database
-      console.log("🗑️ Deleting sold Kue Ready items...");
-      for (const kueReadyItem of kueReadyItems) {
-        if (kueReadyItem.kueReadyId) {
-          try {
-            await deleteKueReady(kueReadyItem.kueReadyId);
-            console.log(`✅ Deleted Kue Ready: ${kueReadyItem.name}`);
-          } catch (deleteError) {
-            console.error(`❌ Failed to delete Kue Ready ${kueReadyItem.name}:`, deleteError);
-          }
+      // STEP 3: Hapus kue ready yang terjual
+      for (const item of kueReadyItems) {
+        if (item.kueReadyId) {
+          try { await deleteKueReady(item.kueReadyId); } catch { /* non-blocking */ }
         }
       }
 
-      // STEP 4: Clear state dan refresh data
+      // STEP 4: Reset state
       setTransactionItems([]);
       setSelectedKueReadyIds([]);
       setCustomerName("");
       setNotes("");
       await refetchProducts();
 
-      // Show success message
-      const successMessage = [];
-      successMessage.push(`Transaksi #${transactionResult.nomorTransaksi} tersimpan`);
-      if (customCakeItems.length > 0) {
-        successMessage.push(`${customCakeItems.length} order kue custom dibuat`);
-      }
-      if (kueReadyItems.length > 0) {
-        successMessage.push(`${kueReadyItems.length} kue ready terjual`);
-      }
+      const parts = [`#${transactionResult.nomorTransaksi} tersimpan`];
+      if (customCakeItems.length > 0) parts.push(`${customCakeItems.length} order dibuat`);
+      if (kueReadyItems.length > 0) parts.push(`${kueReadyItems.length} kue ready terjual`);
 
       Toast.show({
         type: "success",
         text1: "Transaksi Berhasil!",
-        text2: successMessage.join(", "),
+        text2: parts.join(" · "),
         visibilityTime: 4000,
       });
-
     } catch (error: any) {
-      console.error("❌ Error proses transaksi:", error);
-      Toast.show({ 
-        type: "error", 
-        text1: "Error", 
-        text2: error.message || "Gagal proses transaksi" 
+      Toast.show({
+        type: "error",
+        text1: "Transaksi Gagal",
+        text2: error.message || "Terjadi kesalahan",
       });
     } finally {
       setProcessing(false);
     }
+  };
+
+  const processTransaction = (orderData: any) => {
+    if (transactionItems.length === 0) {
+      Toast.show({ type: "error", text1: "Error", text2: "Transaksi kosong" });
+      return;
+    }
+
+    const total = transactionItems.reduce((s, i) => s + i.subtotal, 0);
+    const totalFormatted = total.toLocaleString("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    });
+
+    Alert.alert(
+      "Konfirmasi Transaksi",
+      `${transactionItems.length} item  ·  Total ${totalFormatted}`,
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Proses", onPress: () => executeTransaction(orderData) },
+      ]
+    );
   };
 
   /**
@@ -529,54 +462,84 @@ export default function POSScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header dengan logo dan logout button */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="cafe" size={24} color="#EA580C" />
-          </View>
-          <Text style={styles.headerTitle}>NurCake POS</Text>
+      {/* Tombol logout — floating minimal, tidak memakan layout */}
+      <TouchableOpacity onPress={handleLogout} style={[styles.logoutFloating, { top: insets.top > 0 ? 8 : 12 }]}>
+        <Ionicons name="log-out-outline" size={16} color="#9CA3AF" />
+      </TouchableOpacity>
+
+      {/* Wrapper flex — konten di atas, navbar di bawah dalam layout normal */}
+      <View style={styles.innerWrapper}>
+        <View style={[styles.content, { flexDirection: isWide ? "row" : "column" }]}>
+          {/* Area produk */}
+          <ScrollView
+            style={styles.mainContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                paddingBottom: isWide ? 20 : 140,
+                paddingHorizontal: isLandscape ? 12 : 20,
+              },
+            ]}>
+
+            <TouchableOpacity
+              style={styles.customCakeButton}
+              onPress={() => setShowCustomCakeModal(true)}>
+              <Ionicons name="add" size={20} color="white" />
+              <Text style={styles.customCakeButtonText}>Pesan Kue Custom</Text>
+            </TouchableOpacity>
+
+            <KueReadyComponent
+              onAddToTransaction={addKueReadyToTransaction}
+              selectedKueReadyIds={selectedKueReadyIds}
+              numColumns={numColumns}
+            />
+
+            <OtherProductsComponent
+              onAddToTransaction={addProductToTransaction}
+              transactionItems={transactionItems}
+              numColumns={numColumns}
+            />
+          </ScrollView>
+
+          {/* Tombol toggle bulat — sembunyikan/tampilkan panel transaksi */}
+          {isWide && (
+            <View style={styles.toggleWrapper}>
+              <TouchableOpacity
+                style={styles.toggleButton}
+                onPress={() => setShowTransactionPanel(v => !v)}
+                activeOpacity={0.7}>
+                <Ionicons
+                  name={showTransactionPanel ? "chevron-forward" : "chevron-back"}
+                  size={14}
+                  color="#6B7280"
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Panel transaksi — side panel 30% di wide/landscape */}
+          {isWide && showTransactionPanel && (
+            <View style={styles.transactionPanelWrapper}>
+              <TransactionComponent
+                transactionItems={transactionItems}
+                customerName={customerName}
+                notes={notes}
+                currentTime={currentTime}
+                onCustomerNameChange={setCustomerName}
+                onNotesChange={setNotes}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeFromTransaction}
+                onProcessTransaction={processTransaction}
+                isTablet={true}
+                processing={processing}
+              />
+            </View>
+          )}
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out" size={24} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
 
-      <View style={styles.content}>
-        {/* Main scrollable content area */}
-        <ScrollView
-          style={isTablet ? styles.tabletMainContent : styles.mobileMainContent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: isTablet ? 20 : insets.bottom + 180,
-            },
-          ]}>
-          
-          {/* Button untuk membuka modal pesan kue custom */}
-          <TouchableOpacity
-            style={styles.customCakeButton}
-            onPress={() => setShowCustomCakeModal(true)}>
-            <Ionicons name="add" size={20} color="white" />
-            <Text style={styles.customCakeButtonText}>Pesan Kue Custom</Text>
-          </TouchableOpacity>
-
-          {/* Section untuk menampilkan dan memilih kue ready */}
-          <KueReadyComponent 
-            onAddToTransaction={addKueReadyToTransaction}
-            selectedKueReadyIds={selectedKueReadyIds}
-          />
-
-          {/* Section untuk menampilkan dan memilih produk lainnya */}
-          <OtherProductsComponent
-            onAddToTransaction={addProductToTransaction}
-            transactionItems={transactionItems}
-          />
-        </ScrollView>
-
-        {/* Transaction panel untuk tablet (side panel) */}
-        {isTablet && (
+        {/* Panel transaksi — bottom sheet di portrait */}
+        {!isWide && (
           <TransactionComponent
             transactionItems={transactionItems}
             customerName={customerName}
@@ -587,37 +550,20 @@ export default function POSScreen() {
             onUpdateQuantity={updateQuantity}
             onRemoveItem={removeFromTransaction}
             onProcessTransaction={processTransaction}
-            isTablet={true}
+            isTablet={false}
             processing={processing}
           />
         )}
       </View>
 
-      {/* Transaction panel untuk mobile (bottom floating panel) */}
-      {!isTablet && (
-        <TransactionComponent
-          transactionItems={transactionItems}
-          customerName={customerName}
-          notes={notes}
-          currentTime={currentTime}
-          onCustomerNameChange={setCustomerName}
-          onNotesChange={setNotes}
-          onUpdateQuantity={updateQuantity}
-          onRemoveItem={removeFromTransaction}
-          onProcessTransaction={processTransaction}
-          isTablet={false}
-          processing={processing}
-        />
-      )}
-
-      {/* Modal untuk membuat pesanan kue custom */}
+      {/* Modal kue custom */}
       <CustomCakeComponent
         visible={showCustomCakeModal}
         onClose={() => setShowCustomCakeModal(false)}
         onSave={addCustomCakeToTransaction}
       />
 
-      {/* Bottom navigation bar */}
+      {/* Navbar — layout normal, tidak absolute, tidak pernah menutupi konten */}
       <BottomNavigation currentPage="pos" />
     </SafeAreaView>
   );
@@ -628,61 +574,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F9FAFB",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    zIndex: 10,
+  logoutFloating: {
+    position: "absolute",
+    right: 14,
+    zIndex: 50,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    borderRadius: 8,
+    padding: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logoContainer: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#FED7AA",
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#111827",
-  },
-  logoutButton: {
-    padding: 8,
+  innerWrapper: {
+    flex: 1,
   },
   content: {
     flex: 1,
-    flexDirection: isTablet ? "row" : "column",
   },
-  tabletMainContent: {
-    flex: 1,
+  toggleWrapper: {
+    width: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
-  mobileMainContent: {
+  toggleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  transactionPanelWrapper: {
+    width: "30%",
+    overflow: "hidden",
+  },
+  mainContent: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
   },
   customCakeButton: {
     backgroundColor: "#EA580C",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: 16,
     borderRadius: 8,
-    marginBottom: 24,
+    marginBottom: 16,
     shadowColor: "#EA580C",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,

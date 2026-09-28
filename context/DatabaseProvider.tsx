@@ -4,6 +4,7 @@ import React, {
   ReactNode,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { sqliteService } from "../database/SQLiteService";
+import { seedDevData } from "../database/seedDevData";
 import { syncManager } from "../services/SyncManager";
 
 // ============================================
@@ -43,6 +45,8 @@ interface DatabaseContextType {
     type: "kasir" | "dapur" | "admin"
   ) => Promise<boolean>;
   forceSync: () => Promise<void>;
+  // Dev only
+  runDevSeed: (force?: boolean) => Promise<void>;
 }
 
 interface DatabaseProviderProps {
@@ -67,7 +71,7 @@ export function DatabaseProvider({
   children,
   onInitialized,
   onError,
-}: DatabaseProviderProps): JSX.Element {
+}: DatabaseProviderProps): React.ReactElement {
   // State
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,6 +83,7 @@ export function DatabaseProvider({
   const [isOnline, setIsOnline] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const syncUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // ============================================
   // INITIALIZATION
@@ -88,7 +93,7 @@ export function DatabaseProvider({
     initializeDatabase();
 
     return () => {
-      // Cleanup on unmount
+      syncUnsubscribeRef.current?.();
       syncManager.stop();
     };
   }, []);
@@ -120,6 +125,7 @@ export function DatabaseProvider({
         setLastSyncTime(syncManager.getLastSyncTime());
         setPendingCount(syncManager.getPendingCount());
       });
+      syncUnsubscribeRef.current = unsubscribe;
 
       // 5. Set initial sync values
       setIsOnline(syncManager.getIsOnline());
@@ -170,6 +176,11 @@ export function DatabaseProvider({
     await syncManager.forceSync();
   };
 
+  const runDevSeed = async (force = false): Promise<void> => {
+    if (!isInitialized) throw new Error("Database belum siap");
+    await seedDevData(force);
+  };
+
   // ============================================
   // CONTEXT VALUE
   // ============================================
@@ -186,6 +197,7 @@ export function DatabaseProvider({
     reinitialize,
     registerDevice,
     forceSync,
+    runDevSeed,
   };
 
   // ============================================
@@ -227,7 +239,7 @@ export function DatabaseGate({
   children,
   loadingComponent,
   errorComponent,
-}: DatabaseLoadingProps): JSX.Element {
+}: DatabaseLoadingProps): React.ReactElement {
   const { isInitialized, isLoading, error, reinitialize } = useDatabase();
 
   if (isLoading) {
@@ -257,11 +269,14 @@ export function DatabaseGate({
 // DEFAULT COMPONENTS
 // ============================================
 
-function DefaultLoadingComponent(): JSX.Element {
+function DefaultLoadingComponent(): React.ReactElement {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#E91E63" />
-      <Text style={styles.loadingText}>Memuat database...</Text>
+      <View style={styles.loadingLogoContainer}>
+        <ActivityIndicator size="large" color="#EA580C" />
+      </View>
+      <Text style={styles.loadingTitle}>NurCake POS</Text>
+      <Text style={styles.loadingText}>Menyiapkan aplikasi...</Text>
     </View>
   );
 }
@@ -272,11 +287,13 @@ function DefaultErrorComponent({
 }: {
   error: string;
   onRetry: () => void;
-}): JSX.Element {
+}): React.ReactElement {
   return (
     <View style={styles.container}>
-      <Text style={styles.errorIcon}>⚠️</Text>
-      <Text style={styles.errorTitle}>Terjadi Kesalahan</Text>
+      <View style={styles.errorIconContainer}>
+        <Text style={styles.errorIcon}>⚠️</Text>
+      </View>
+      <Text style={styles.errorTitle}>Gagal Memuat Database</Text>
       <Text style={styles.errorMessage}>{error}</Text>
       <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
         <Text style={styles.retryButtonText}>Coba Lagi</Text>
@@ -290,39 +307,57 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFF5F7",
+    backgroundColor: "#FFF7ED",
     padding: 20,
   },
+  loadingLogoContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: "#FED7AA",
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  loadingTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+  },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#666",
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  errorIconContainer: {
+    marginBottom: 16,
   },
   errorIcon: {
     fontSize: 48,
-    marginBottom: 16,
   },
   errorTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 8,
+    textAlign: "center",
   },
   errorMessage: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 13,
+    color: "#6B7280",
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 28,
+    lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: "#E91E63",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: "#EA580C",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 10,
   },
   retryButtonText: {
     color: "#FFF",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
   },
 });

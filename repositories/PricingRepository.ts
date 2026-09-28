@@ -1,5 +1,5 @@
 // repositories/PricingRepository.ts - Fixed with Complete SQLite Integration
-import { sqliteService } from "../database/SQLiteService";
+import { Pengaturan, sqliteService } from "../database/SQLiteService";
 
 export interface KriteriaItem {
   id: string;
@@ -270,7 +270,7 @@ class PricingRepository {
   async getAllRulesHarga(): Promise<RulesHargaWithDetails[]> {
     try {
       // Get rules from pengaturan table with key pattern "rules_harga_*"
-      const rulesSettings = await sqliteService.getAll(
+      const rulesSettings = await sqliteService.getAll<Pengaturan>(
         'SELECT * FROM pengaturan WHERE key LIKE "rules_harga_%" ORDER BY diperbarui DESC'
       );
 
@@ -283,19 +283,19 @@ class PricingRepository {
           // Get detail names from master data
           const [jenisKue, variasiKue, ukuranKue, kotakKue] = await Promise.all(
             [
-              sqliteService.getFirst(
+              sqliteService.getFirst<{ nama: string }>(
                 "SELECT nama FROM jenis_kue WHERE id = ?",
                 [ruleData.jenisKueId]
               ),
-              sqliteService.getFirst(
+              sqliteService.getFirst<{ nama: string }>(
                 "SELECT nama FROM variasi_kue WHERE id = ?",
                 [ruleData.variasiKueId]
               ),
-              sqliteService.getFirst(
+              sqliteService.getFirst<{ nama: string }>(
                 "SELECT nama FROM ukuran_kue WHERE id = ?",
                 [ruleData.ukuranKueId]
               ),
-              sqliteService.getFirst(
+              sqliteService.getFirst<{ nama: string }>(
                 "SELECT nama FROM aksesoris_kue WHERE id = ?",
                 [ruleData.kotakKueId]
               ),
@@ -419,7 +419,7 @@ class PricingRepository {
     }
   ): Promise<RulesHarga> {
     try {
-      const setting = await sqliteService.getFirst(
+      const setting = await sqliteService.getFirst<Pengaturan>(
         "SELECT * FROM pengaturan WHERE id = ?",
         [id]
       );
@@ -593,6 +593,7 @@ class PricingRepository {
   async bulkDeleteRulesHarga(ids: string[]): Promise<void> {
     try {
       const db = sqliteService.getDatabase();
+      if (!db) throw new Error("Database not initialized");
       await db.execAsync("BEGIN TRANSACTION");
 
       try {
@@ -656,6 +657,7 @@ class PricingRepository {
   async clearAllPricingData(): Promise<void> {
     try {
       const db = sqliteService.getDatabase();
+      if (!db) throw new Error("Database not initialized");
       await db.execAsync("BEGIN TRANSACTION");
 
       try {

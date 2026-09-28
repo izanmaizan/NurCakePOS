@@ -11,7 +11,6 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Image,
   Linking,
   Modal,
@@ -23,6 +22,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import {
   SafeAreaView,
@@ -33,9 +33,6 @@ import { sqliteService } from "../database/SQLiteService";
 import { useOrders } from "../hooks/useOrders";
 import { usePricing } from "../hooks/usePricing";
 import { useTransactions } from "../hooks/useTransactions";
-
-const { width: screenWidth } = Dimensions.get("screen");
-const isTablet = screenWidth >= 768;
 
 // Types
 interface AdditionalCost {
@@ -90,6 +87,7 @@ interface TransactionComponentProps {
   onRemoveItem: (itemId: string) => void;
   onProcessTransaction: (orderData: any) => void;
   isTablet?: boolean;
+  processing?: boolean;
 }
 
 export default function TransactionComponent({
@@ -105,6 +103,7 @@ export default function TransactionComponent({
   isTablet = false,
 }: TransactionComponentProps) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { createTransaction, loading: transactionLoading } = useTransactions();
   const { createOrder, loading: orderLoading, masterData } = useOrders();
   const { masterKriteria } = usePricing();
@@ -587,21 +586,18 @@ export default function TransactionComponent({
             const orderData = {
               namaPelanggan: customerName,
               noHp: "",
-              tanggalPesan: new Date(),
-              tanggalAmbil: pickupDateTime,
-              jenisKueId,
-              variasiKueId,
-              ukuranKueId,
-              kotakKueId,
-              hargaTotal: customCake.subtotal,
-              statusPesanan: "pending", // FIX: Always "pending" for custom cake
+              tanggalAmbil: pickupDateTime.toISOString().split('T')[0],
+              jenisKue: jenisKueId,
+              variasiKue: variasiKueId,
+              ukuranKue: ukuranKueId,
+              kotakKue: kotakKueId,
+              totalHarga: customCake.subtotal,
               catatan:
                 customCake.customDetails?.notes ||
                 customCake.notes ||
                 notes ||
                 "",
-              gambarReferensiPath: savedImagePath,
-              transaksiId: newTransaction.id,
+              gambarReferensi: savedImagePath,
             };
 
             console.log("📝 Creating order:", orderData);
@@ -799,7 +795,7 @@ export default function TransactionComponent({
       <ScrollView
         style={styles.transactionPanelContent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         {/* Step Indicator */}
         <View style={styles.stepIndicator}>
           <View style={styles.stepIndicatorContainer}>
@@ -1073,7 +1069,7 @@ export default function TransactionComponent({
       <ScrollView
         style={styles.transactionPanelContent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         {/* Success Icon */}
         <View style={styles.receiptSuccessContainer}>
           <View style={styles.receiptSuccessIcon}>
@@ -1193,7 +1189,7 @@ export default function TransactionComponent({
     <ScrollView
       style={styles.transactionPanelContent}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}>
+      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       <View style={styles.transactionDateSection}>
         <Text style={styles.sectionLabel}>Tanggal Transaksi</Text>
         <View style={styles.dateTimeDisplay}>
@@ -1435,16 +1431,8 @@ export default function TransactionComponent({
                     Rp {item.unitPrice.toLocaleString("id-ID")}
                   </Text>
                   {item.type === "kue_custom" && (
-                    <View
-                      style={{
-                        backgroundColor: "#FEF3C7",
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 4,
-                      }}>
-                      <Text style={{ fontSize: 10, color: "#92400E" }}>
-                        Custom
-                      </Text>
+                    <View style={styles.customBadge}>
+                      <Text style={styles.customBadgeText}>Custom</Text>
                     </View>
                   )}
                 </View>
@@ -1501,7 +1489,7 @@ export default function TransactionComponent({
         <TouchableOpacity
           style={[
             styles.floatingTransactionButton,
-            { bottom: insets.bottom + 90 },
+            { bottom: 16 },
           ]}
           onPress={() => setIsTransactionPanelOpen(true)}>
           <View style={styles.floatingButtonContent}>
@@ -1523,7 +1511,7 @@ export default function TransactionComponent({
 
       {isTransactionPanelOpen && (
         <View
-          style={[styles.expandableTransactionPanel, { bottom: 0, top: 80 }]}>
+          style={[styles.expandableTransactionPanel, { bottom: 0, top: 0 }]}>
           {/* Header */}
           <View style={styles.transactionPanelHeader}>
             <TouchableOpacity
@@ -1563,7 +1551,7 @@ export default function TransactionComponent({
             <View
               style={[
                 styles.panelActionButtons,
-                { paddingBottom: insets.bottom + 90 },
+                { paddingBottom: 16 },
               ]}>
               <TouchableOpacity
                 style={styles.processButton}
@@ -1580,7 +1568,7 @@ export default function TransactionComponent({
             <View
               style={[
                 styles.panelActionButtons,
-                { paddingBottom: insets.bottom + 90, gap: 8 },
+                { paddingBottom: insets.bottom + 16, gap: 8 },
               ]}>
               <TouchableOpacity
                 style={[
@@ -1611,7 +1599,7 @@ export default function TransactionComponent({
             <View
               style={[
                 styles.panelActionButtons,
-                { paddingBottom: insets.bottom + 90 },
+                { paddingBottom: 16 },
               ]}>
               <TouchableOpacity
                 style={[styles.processButton, { backgroundColor: "#10B981" }]}
@@ -1626,12 +1614,410 @@ export default function TransactionComponent({
     </>
   );
 
-  // Render tablet transaction panel
-  const renderTabletTransactionPanel = () => (
-    <View style={styles.transactionPanel}>
-      {renderMobileTransactionSummary()}
-    </View>
-  );
+  // ─────────────────────────────────────────────────────────────────
+  // WIDE PANEL — panel samping khusus landscape / tablet
+  // Desain compact & professional, tidak pakai expand/collapse
+  // ─────────────────────────────────────────────────────────────────
+
+  const renderWidePanelItems = () => {
+    const total = getTotalPrice();
+    const totalItem = getTotalItems();
+
+    return (
+      <View style={wp.container}>
+        {/* Header */}
+        <View style={wp.header}>
+          <View style={wp.headerLeft}>
+            <View style={wp.headerIcon}>
+              <Ionicons name="receipt" size={14} color="#EA580C" />
+            </View>
+            <Text style={wp.headerTitle}>Pesanan</Text>
+            {transactionItems.length > 0 && (
+              <View style={wp.headerBadge}>
+                <Text style={wp.headerBadgeText}>{transactionItems.length}</Text>
+              </View>
+            )}
+          </View>
+          {/* Step dots */}
+          <View style={wp.steps}>
+            <View style={[wp.stepDot, wp.stepDotActive]} />
+            <View style={[wp.stepDot, wp.stepDotInactive]} />
+            <View style={[wp.stepDot, wp.stepDotInactive]} />
+          </View>
+        </View>
+
+        {/* Customer input — compact */}
+        <View style={wp.customerRow}>
+          <Ionicons name="person-outline" size={15} color="#9CA3AF" />
+          <TextInput
+            style={wp.customerInput}
+            value={customerName}
+            onChangeText={onCustomerNameChange}
+            placeholder="Nama pelanggan..."
+            placeholderTextColor="#9CA3AF"
+            returnKeyType="done"
+          />
+        </View>
+
+        {/* Items list */}
+        {transactionItems.length === 0 ? (
+          <View style={wp.emptyState}>
+            <Ionicons name="cart-outline" size={36} color="#D1D5DB" />
+            <Text style={wp.emptyTitle}>Keranjang kosong</Text>
+            <Text style={wp.emptySubtext}>Pilih produk dari panel kiri</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={wp.itemsList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled">
+            {transactionItems.map((item, idx) => {
+              const typeColor =
+                item.type === "kue_custom"
+                  ? "#D97706"
+                  : item.type === "kue_ready"
+                  ? "#2563EB"
+                  : "#16A34A";
+              const typeBg =
+                item.type === "kue_custom"
+                  ? "#FEF3C7"
+                  : item.type === "kue_ready"
+                  ? "#DBEAFE"
+                  : "#DCFCE7";
+              const typeIcon =
+                item.type === "kue_custom"
+                  ? "star"
+                  : item.type === "kue_ready"
+                  ? "cafe"
+                  : ("cube" as any);
+
+              return (
+                <View
+                  key={item.id}
+                  style={[wp.itemRow, idx < transactionItems.length - 1 && wp.itemRowBorder]}>
+                  {/* Type badge */}
+                  <View style={[wp.typeBadge, { backgroundColor: typeBg }]}>
+                    <Ionicons name={typeIcon} size={11} color={typeColor} />
+                  </View>
+
+                  {/* Name + price */}
+                  <View style={wp.itemInfo}>
+                    <Text style={wp.itemName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={wp.itemUnit}>
+                      Rp {item.unitPrice.toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+
+                  {/* Qty stepper */}
+                  <View style={wp.qtyRow}>
+                    <TouchableOpacity
+                      onPress={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                      style={wp.qtyBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Ionicons name="remove" size={13} color="#EA580C" />
+                    </TouchableOpacity>
+                    <Text style={wp.qtyText}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      onPress={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                      style={wp.qtyBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Ionicons name="add" size={13} color="#EA580C" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Subtotal + delete */}
+                  <View style={wp.itemRight}>
+                    <Text style={wp.itemSubtotal}>
+                      {(item.subtotal / 1000).toFixed(0)}K
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => onRemoveItem(item.id)}
+                      style={wp.deleteBtn}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Ionicons name="close" size={13} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Total footer */}
+        <View style={wp.footer}>
+          <View style={wp.totalRow}>
+            <Text style={wp.totalLabel}>{totalItem} item</Text>
+            <Text style={wp.totalValue}>
+              Rp {total.toLocaleString("id-ID")}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[wp.payBtn, transactionItems.length === 0 && wp.payBtnDisabled]}
+            onPress={transactionItems.length > 0 ? handleProceedToPayment : undefined}
+            disabled={transactionItems.length === 0}
+            activeOpacity={0.85}>
+            <Ionicons name="card" size={16} color="white" />
+            <Text style={wp.payBtnText}>Proses Pembayaran</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderWidePanelPayment = () => {
+    const total = getTotalPrice();
+    const shortage = Math.max(0, total - orderForm.paidAmount);
+    const change = Math.max(0, orderForm.paidAmount - total);
+    const quickAmounts = [total, total + 10000, total + 50000, 100000, 200000];
+    const uniqueQuick = [...new Set(quickAmounts)].slice(0, 4);
+
+    return (
+      <View style={wp.container}>
+        {/* Header */}
+        <View style={wp.header}>
+          <TouchableOpacity
+            onPress={() => setCurrentStep("items")}
+            style={wp.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="arrow-back" size={18} color="#6B7280" />
+          </TouchableOpacity>
+          <Text style={wp.headerTitle}>Pembayaran</Text>
+          <View style={wp.steps}>
+            <View style={[wp.stepDot, wp.stepDotDone]}>
+              <Ionicons name="checkmark" size={8} color="white" />
+            </View>
+            <View style={[wp.stepDot, wp.stepDotActive]} />
+            <View style={[wp.stepDot, wp.stepDotInactive]} />
+          </View>
+        </View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={wp.payScroll}>
+
+          {/* Total besar */}
+          <View style={wp.totalCard}>
+            <Text style={wp.totalCardLabel}>Total Pembayaran</Text>
+            <Text style={wp.totalCardAmount}>
+              Rp {total.toLocaleString("id-ID")}
+            </Text>
+            <Text style={wp.totalCardSub}>
+              {customerName || "Pelanggan"} · {getTotalItems()} item
+            </Text>
+          </View>
+
+          {/* Metode pembayaran */}
+          <Text style={wp.sectionLabel}>Metode</Text>
+          <View style={wp.methodRow}>
+            <TouchableOpacity
+              style={[wp.methodBtn, orderForm.paymentMethod === "cash" && wp.methodBtnActive]}
+              onPress={() => setOrderForm(p => ({ ...p, paymentMethod: "cash", transferProof: undefined }))}>
+              <Ionicons name="cash" size={16} color={orderForm.paymentMethod === "cash" ? "white" : "#6B7280"} />
+              <Text style={[wp.methodLabel, orderForm.paymentMethod === "cash" && wp.methodLabelActive]}>Tunai</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[wp.methodBtn, orderForm.paymentMethod === "transfer" && wp.methodBtnActive]}
+              onPress={() => setOrderForm(p => ({ ...p, paymentMethod: "transfer" }))}>
+              <Ionicons name="phone-portrait" size={16} color={orderForm.paymentMethod === "transfer" ? "white" : "#6B7280"} />
+              <Text style={[wp.methodLabel, orderForm.paymentMethod === "transfer" && wp.methodLabelActive]}>Transfer</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Jumlah bayar */}
+          <Text style={wp.sectionLabel}>Jumlah Bayar</Text>
+          <View style={wp.amountInputRow}>
+            <Text style={wp.amountPrefix}>Rp</Text>
+            <TextInput
+              style={wp.amountInput}
+              value={orderForm.paidAmount > 0 ? orderForm.paidAmount.toString() : ""}
+              onChangeText={t => setOrderForm(p => ({ ...p, paidAmount: parseInt(t.replace(/[^0-9]/g, "")) || 0 }))}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          {/* Quick amounts */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={wp.quickRow} contentContainerStyle={{ gap: 6 }}>
+            {uniqueQuick.map(amt => (
+              <TouchableOpacity
+                key={amt}
+                style={[wp.quickBtn, orderForm.paidAmount === amt && wp.quickBtnActive]}
+                onPress={() => setOrderForm(p => ({ ...p, paidAmount: amt }))}>
+                <Text style={[wp.quickBtnText, orderForm.paidAmount === amt && wp.quickBtnTextActive]}>
+                  {amt >= 1000 ? `${(amt / 1000).toFixed(0)}K` : `${amt}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Kembalian / kekurangan */}
+          {change > 0 && (
+            <View style={[wp.changeRow, { backgroundColor: "#DCFCE7" }]}>
+              <Ionicons name="arrow-down-circle" size={15} color="#16A34A" />
+              <Text style={[wp.changeLabel, { color: "#16A34A" }]}>Kembalian</Text>
+              <Text style={[wp.changeValue, { color: "#16A34A" }]}>
+                Rp {change.toLocaleString("id-ID")}
+              </Text>
+            </View>
+          )}
+          {shortage > 0 && (
+            <View style={[wp.changeRow, { backgroundColor: "#FEF3C7" }]}>
+              <Ionicons name="alert-circle" size={15} color="#D97706" />
+              <Text style={[wp.changeLabel, { color: "#D97706" }]}>Kekurangan</Text>
+              <Text style={[wp.changeValue, { color: "#D97706" }]}>
+                Rp {shortage.toLocaleString("id-ID")}
+              </Text>
+            </View>
+          )}
+
+          {/* Jadwal ambil (compact) */}
+          <Text style={wp.sectionLabel}>Jadwal Ambil</Text>
+          <View style={wp.pickupRow}>
+            <TouchableOpacity style={wp.pickupBtn} onPress={() => setShowDatePicker(true)}>
+              <Ionicons name="calendar" size={14} color="#6B7280" />
+              <Text style={wp.pickupBtnText}>
+                {(orderForm.pickupDate || new Date()).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={wp.pickupBtn} onPress={() => setShowTimePicker(true)}>
+              <Ionicons name="time" size={14} color="#6B7280" />
+              <Text style={wp.pickupBtnText}>{orderForm.pickupTime || "00:00"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={orderForm.pickupDate || new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onDateChange}
+            />
+          )}
+          {showTimePicker && (
+            <DateTimePicker
+              value={(() => {
+                const p = (orderForm.pickupTime || "00:00").split(":");
+                const d = new Date();
+                d.setHours(parseInt(p[0]) || 0, parseInt(p[1]) || 0, 0, 0);
+                return d;
+              })()}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onTimeChange}
+            />
+          )}
+        </ScrollView>
+
+        {/* Footer action */}
+        <View style={wp.footer}>
+          <TouchableOpacity
+            style={[wp.payBtn, (processing || transactionLoading) && wp.payBtnDisabled]}
+            onPress={handleCreateTransaction}
+            disabled={processing || transactionLoading}
+            activeOpacity={0.85}>
+            {processing || transactionLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={16} color="white" />
+                <Text style={wp.payBtnText}>Selesaikan Transaksi</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderWidePanelReceipt = () => {
+    if (!orderResult) return null;
+    return (
+      <View style={wp.container}>
+        {/* Header */}
+        <View style={wp.header}>
+          <View style={wp.headerIcon}>
+            <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+          </View>
+          <Text style={wp.headerTitle}>Selesai</Text>
+          <View style={wp.steps}>
+            {[1, 2, 3].map(i => (
+              <View key={i} style={[wp.stepDot, wp.stepDotDone]}>
+                <Ionicons name="checkmark" size={8} color="white" />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={wp.payScroll}>
+          {/* Success card */}
+          <View style={wp.receiptSuccess}>
+            <View style={wp.receiptSuccessIcon}>
+              <Ionicons name="checkmark-circle" size={28} color="#10B981" />
+            </View>
+            <Text style={wp.receiptSuccessTitle}>Transaksi Berhasil!</Text>
+            <Text style={wp.receiptSuccessNumber}>#{orderResult.orderNumber}</Text>
+          </View>
+
+          {/* Summary */}
+          <View style={wp.receiptCard}>
+            {[
+              { label: "Pelanggan", value: orderResult.customerName || "—" },
+              { label: "Total", value: `Rp ${orderResult.totalPrice?.toLocaleString("id-ID")}`, bold: true },
+              { label: "Dibayar", value: `Rp ${orderResult.paidAmount?.toLocaleString("id-ID")}` },
+              ...(orderResult.changeAmount > 0 ? [{ label: "Kembalian", value: `Rp ${orderResult.changeAmount?.toLocaleString("id-ID")}`, color: "#10B981" }] : []),
+              ...(orderResult.shortageAmount > 0 ? [{ label: "Kekurangan", value: `Rp ${orderResult.shortageAmount?.toLocaleString("id-ID")}`, color: "#F59E0B" }] : []),
+              { label: "Metode", value: orderResult.paymentMethod === "cash" ? "Tunai" : "Transfer" },
+            ].map((row: any, i) => (
+              <View key={i} style={[wp.receiptRow, i > 0 && { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
+                <Text style={wp.receiptRowLabel}>{row.label}</Text>
+                <Text style={[wp.receiptRowValue, row.bold && { fontWeight: "700", color: "#EA580C" }, row.color && { color: row.color }]}>
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Share buttons */}
+          <View style={wp.receiptBtns}>
+            <TouchableOpacity style={wp.receiptShareBtn} onPress={handlePrintReceipt}>
+              <Ionicons name="share-social" size={15} color="#EA580C" />
+              <Text style={wp.receiptShareBtnText}>Bagikan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={wp.receiptShareBtn} onPress={handleShareWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={15} color="#25D366" />
+              <Text style={wp.receiptShareBtnText}>WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <View style={wp.footer}>
+          <TouchableOpacity
+            style={[wp.payBtn, { backgroundColor: "#10B981" }]}
+            onPress={handleClosePanel}
+            activeOpacity={0.85}>
+            <Ionicons name="add-circle" size={16} color="white" />
+            <Text style={wp.payBtnText}>Transaksi Baru</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Render wide panel: items / payment / receipt — modals di dalam agar component return View tunggal
+  const renderTabletTransactionPanel = () => {
+    return (
+      <View style={styles.transactionPanel}>
+        {currentStep === "items" && renderWidePanelItems()}
+        {currentStep === "payment" && renderWidePanelPayment()}
+        {currentStep === "receipt" && renderWidePanelReceipt()}
+        {renderDetailModal()}
+        {renderImageModal()}
+      </View>
+    );
+  };
 
   // Render Detail Modal
   const renderDetailModal = () => (
@@ -1814,8 +2200,8 @@ export default function TransactionComponent({
                 : `file://${selectedImages[currentImageIndex]}`,
             }}
             style={{
-              width: screenWidth - 40,
-              height: screenWidth - 40,
+              width: windowWidth - 40,
+              height: windowWidth - 40,
               borderRadius: 8,
             }}
             resizeMode="contain"
@@ -1859,13 +2245,7 @@ export default function TransactionComponent({
   }
 
   if (isTablet) {
-    return (
-      <>
-        {renderTabletTransactionPanel()}
-        {renderDetailModal()}
-        {renderImageModal()}
-      </>
-    );
+    return renderTabletTransactionPanel();
   }
 
   return (
@@ -1946,11 +2326,10 @@ const styles = StyleSheet.create({
     color: "#7C2D12",
   },
   transactionPanel: {
-    width: 320,
-    backgroundColor: "white",
+    flex: 1,
+    backgroundColor: "#F9FAFB",
     borderLeftWidth: 1,
     borderLeftColor: "#E5E7EB",
-    padding: 20,
   },
   transactionDateSection: {
     backgroundColor: "#FFF7ED",
@@ -1994,7 +2373,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 12,
-    zIndex: 999,
+    zIndex: 1100,
   },
   floatingButtonContent: {
     flexDirection: "row",
@@ -2041,7 +2420,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 16,
-    zIndex: 1000,
+    zIndex: 1100,
   },
   transactionPanelHeader: {
     flexDirection: "row",
@@ -2261,6 +2640,17 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 4,
     textAlign: "center",
+  },
+  customBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  customBadgeText: {
+    fontSize: 10,
+    color: "#92400E",
+    fontWeight: "600",
   },
   transactionItem: {
     flexDirection: "row",
@@ -2693,4 +3083,197 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontWeight: "500",
   },
+});
+
+// ─────────────────────────────────────────────────────────────────
+// WIDE PANEL STYLES — compact & professional untuk landscape
+// ─────────────────────────────────────────────────────────────────
+const wp = StyleSheet.create({
+  container:        { flex: 1, backgroundColor: "white" },
+
+  // Header
+  header: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: "#F3F4F6",
+    backgroundColor: "white", gap: 8,
+  },
+  headerLeft:       { flexDirection: "row", alignItems: "center", flex: 1, gap: 6 },
+  headerIcon: {
+    width: 26, height: 26, borderRadius: 7,
+    backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center",
+  },
+  headerTitle:      { fontSize: 14, fontWeight: "700", color: "#111827" },
+  headerBadge: {
+    minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#EA580C",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
+  },
+  headerBadgeText:  { fontSize: 10, fontWeight: "700", color: "white" },
+
+  backBtn: {
+    width: 28, height: 28, borderRadius: 8, backgroundColor: "#F3F4F6",
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // Step dots
+  steps:            { flexDirection: "row", gap: 4, alignItems: "center" },
+  stepDot:          { width: 7, height: 7, borderRadius: 4 },
+  stepDotActive:    { backgroundColor: "#EA580C", width: 18, borderRadius: 4 },
+  stepDotInactive:  { backgroundColor: "#E5E7EB" },
+  stepDotDone:      {
+    backgroundColor: "#10B981", width: 13, height: 13, borderRadius: 7,
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // Customer input
+  customerRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: "#F3F4F6",
+    backgroundColor: "#FAFAFA",
+  },
+  customerInput: {
+    flex: 1, fontSize: 13, color: "#111827", paddingVertical: 4,
+  },
+
+  // Empty
+  emptyState: {
+    flex: 1, alignItems: "center", justifyContent: "center", padding: 20, gap: 6,
+  },
+  emptyTitle:       { fontSize: 13, fontWeight: "600", color: "#9CA3AF" },
+  emptySubtext:     { fontSize: 11, color: "#D1D5DB", textAlign: "center" },
+
+  // Items list
+  itemsList:        { flex: 1 },
+  itemRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 8, gap: 6,
+  },
+  itemRowBorder:    { borderBottomWidth: 1, borderBottomColor: "#F9FAFB" },
+  typeBadge: {
+    width: 22, height: 22, borderRadius: 6,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  itemInfo:         { flex: 1, minWidth: 0 },
+  itemName:         { fontSize: 12, fontWeight: "600", color: "#111827", marginBottom: 1 },
+  itemUnit:         { fontSize: 10, color: "#9CA3AF" },
+  qtyRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F9FAFB", borderRadius: 6, borderWidth: 1, borderColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  qtyBtn: {
+    width: 22, height: 22, alignItems: "center", justifyContent: "center",
+  },
+  qtyText:          { fontSize: 12, fontWeight: "600", color: "#111827", minWidth: 18, textAlign: "center" },
+  itemRight:        { alignItems: "flex-end", gap: 2, flexShrink: 0 },
+  itemSubtotal:     { fontSize: 12, fontWeight: "700", color: "#111827" },
+  deleteBtn:        { padding: 2 },
+
+  // Footer
+  footer: {
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: "#F3F4F6", backgroundColor: "white", gap: 8,
+  },
+  totalRow:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalLabel:       { fontSize: 11, color: "#9CA3AF", fontWeight: "500" },
+  totalValue:       { fontSize: 15, fontWeight: "700", color: "#111827" },
+  payBtn: {
+    backgroundColor: "#EA580C", borderRadius: 10,
+    paddingVertical: 11, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 6,
+    shadowColor: "#EA580C", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
+  },
+  payBtnDisabled:   { backgroundColor: "#FED7AA", shadowOpacity: 0 },
+  payBtnText:       { fontSize: 13, fontWeight: "700", color: "white" },
+
+  // Payment step
+  payScroll:        { padding: 12, gap: 12 },
+  totalCard: {
+    backgroundColor: "#FFF7ED", borderRadius: 10,
+    padding: 14, alignItems: "center",
+    borderWidth: 1, borderColor: "#FED7AA",
+  },
+  totalCardLabel:   { fontSize: 11, color: "#9A3412", fontWeight: "500", marginBottom: 4 },
+  totalCardAmount:  { fontSize: 22, fontWeight: "800", color: "#EA580C" },
+  totalCardSub:     { fontSize: 11, color: "#B45309", marginTop: 3 },
+
+  sectionLabel:     { fontSize: 11, fontWeight: "600", color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.3 },
+
+  methodRow:        { flexDirection: "row", gap: 8 },
+  methodBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 9, borderRadius: 8,
+    borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB",
+  },
+  methodBtnActive:  { backgroundColor: "#EA580C", borderColor: "#EA580C" },
+  methodLabel:      { fontSize: 12, fontWeight: "600", color: "#374151" },
+  methodLabelActive:{ color: "white" },
+
+  amountInputRow: {
+    flexDirection: "row", alignItems: "center",
+    borderWidth: 1.5, borderColor: "#E5E7EB", borderRadius: 8,
+    backgroundColor: "#F9FAFB", paddingHorizontal: 10,
+  },
+  amountPrefix:     { fontSize: 13, color: "#6B7280", marginRight: 4 },
+  amountInput:      { flex: 1, fontSize: 16, fontWeight: "700", color: "#111827", paddingVertical: 10 },
+
+  quickRow:         { marginTop: 4 },
+  quickBtn: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 6,
+    backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB",
+  },
+  quickBtnActive:   { backgroundColor: "#FEF3C7", borderColor: "#F59E0B" },
+  quickBtnText:     { fontSize: 12, fontWeight: "600", color: "#374151" },
+  quickBtnTextActive:{ color: "#92400E" },
+
+  changeRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    padding: 10, borderRadius: 8,
+  },
+  changeLabel:      { flex: 1, fontSize: 12, fontWeight: "600" },
+  changeValue:      { fontSize: 13, fontWeight: "700" },
+
+  pickupRow:        { flexDirection: "row", gap: 8 },
+  pickupBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 5,
+    paddingVertical: 9, paddingHorizontal: 10,
+    borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+  },
+  pickupBtnText:    { fontSize: 12, color: "#374151", flex: 1 },
+
+  // Receipt
+  receiptSuccess: {
+    alignItems: "center", padding: 16, gap: 4,
+    backgroundColor: "#F0FDF4", borderRadius: 10,
+    borderWidth: 1, borderColor: "#BBF7D0",
+  },
+  receiptSuccessIcon: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: "#DCFCE7",
+    alignItems: "center", justifyContent: "center", marginBottom: 4,
+  },
+  receiptSuccessTitle:{ fontSize: 14, fontWeight: "700", color: "#15803D" },
+  receiptSuccessNumber:{ fontSize: 11, color: "#16A34A", fontWeight: "500" },
+
+  receiptCard: {
+    backgroundColor: "white", borderRadius: 10,
+    borderWidth: 1, borderColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  receiptRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+  receiptRowLabel:  { fontSize: 11, color: "#6B7280" },
+  receiptRowValue:  { fontSize: 12, color: "#111827", fontWeight: "500" },
+
+  receiptBtns:      { flexDirection: "row", gap: 8 },
+  receiptShareBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 10, borderRadius: 8,
+    borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB",
+  },
+  receiptShareBtnText:{ fontSize: 12, fontWeight: "600", color: "#374151" },
 });
